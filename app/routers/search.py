@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.data.services import get_profile
 from app.models.schemas import LeadFit, ReviewLead, SearchRequest, SearchResponse
+from app.services.category_suggester import CategorySuggester
 from app.services.classifier import ReviewClassifier
 from app.services.places import PlacesService
 
@@ -32,6 +33,7 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
     try:
         places_service = PlacesService()
         classifier = ReviewClassifier()
+        suggester = CategorySuggester()
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -65,6 +67,7 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
         place_name = PlacesService.place_name(details)
         address = details.get("formattedAddress")
         place_rating = details.get("rating")
+        contacts = PlacesService.extract_contacts(details)
 
         for review in PlacesService.extract_reviews(details):
             reviews_analyzed += 1
@@ -83,6 +86,9 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
                         place_name=place_name,
                         place_id=place_id,
                         address=address,
+                        phone=contacts["phone"],
+                        website=contacts["website"],
+                        google_maps_url=contacts["google_maps_url"],
                         rating=place_rating,
                         review_text=review["text"],
                         review_rating=review.get("rating"),
@@ -97,11 +103,23 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
         key=lambda item: {"high": 0, "medium": 1, "low": 2, "none": 3}[item.lead_fit.value]
     )
 
+    relevant_leads = sum(1 for lead in leads if lead.lead_fit in (LeadFit.HIGH, LeadFit.MEDIUM))
+
     summary = await classifier.summarize_leads(
         project_description=project_description,
         leads=leads,
         places_scanned=len(places),
         reviews_analyzed=reviews_analyzed,
+    )
+
+    category_suggestions = await suggester.suggest(
+        center=request.center,
+        radius_km=request.radius_km,
+        current_business_type=request.business_type,
+        project_id=request.project_id,
+        project_description=project_description,
+        places_found=len(places),
+        relevant_leads=relevant_leads,
     )
 
     return SearchResponse(
@@ -114,4 +132,5 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
         reviews_analyzed=reviews_analyzed,
         leads=leads,
         summary=summary,
+        category_suggestions=category_suggestions,
     )

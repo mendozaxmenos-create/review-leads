@@ -8,7 +8,9 @@ from app.config import settings
 PLACES_BASE = "https://places.googleapis.com/v1"
 FIELD_MASK_SEARCH = "places.id,places.displayName,places.formattedAddress,places.rating"
 FIELD_MASK_DETAILS = (
-    "id,displayName,formattedAddress,rating,reviews.text,reviews.rating,reviews.authorAttribution.displayName"
+    "id,displayName,formattedAddress,rating,"
+    "nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,"
+    "reviews.text,reviews.rating,reviews.authorAttribution.displayName"
 )
 
 
@@ -68,6 +70,15 @@ class PlacesService:
     def place_name(place: dict[str, Any]) -> str:
         display = place.get("displayName") or {}
         return display.get("text", "Sin nombre")
+
+    @staticmethod
+    def extract_contacts(place: dict[str, Any]) -> dict[str, str | None]:
+        phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber")
+        return {
+            "phone": phone,
+            "website": place.get("websiteUri"),
+            "google_maps_url": place.get("googleMapsUri"),
+        }
 
     @staticmethod
     def extract_reviews(place: dict[str, Any]) -> list[dict[str, Any]]:

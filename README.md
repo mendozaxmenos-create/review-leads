@@ -39,7 +39,33 @@ OPENAI_API_KEY=tu_clave
 uvicorn app.main:app --reload
 ```
 
-Documentación interactiva: http://localhost:8000/docs
+## Usar la interfaz (sin código)
+
+1. Configurá `.env` con tus API keys (ver Setup)
+2. Ejecutá el servidor:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+3. Abrí **http://localhost:8000** en el navegador
+
+Desde la UI podés:
+- Buscar una dirección o elegir el punto en el mapa
+- Ajustar el radio en km
+- Elegir el servicio que ofrecés
+- Buscar leads y seleccionarlos con checkbox
+- Exportar los seleccionados a CSV
+
+### Contactos y mensajes
+
+- Cada lead muestra **teléfono, web y Google Maps** (si Google los tiene)
+- **Escribir mensaje**: genera un mensaje listo para WhatsApp/email
+- **Bot de ventas**: simula conversación para ofrecer y cerrar el lead
+- **Mensajes seleccionados**: genera mensajes para todos los leads marcados
+- Si la categoría no encaja o hay pocos leads, la app **sugiere otras categorías** para buscar
+
+La documentación de la API sigue en http://localhost:8000/docs
 
 ## Servicios disponibles
 
