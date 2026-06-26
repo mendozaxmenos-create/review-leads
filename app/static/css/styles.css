@@ -271,6 +271,12 @@ input[type="range"] {
   margin-bottom: 0.5rem;
 }
 
+.empty-hint {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
 .lead-card {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -449,8 +455,9 @@ input[type="range"] {
 }
 
 .suggestions-box {
-  margin: 0 1.25rem 1rem;
+  margin: 0 1.25rem 2rem;
   padding: 1rem;
+  flex-shrink: 0;
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: var(--radius);

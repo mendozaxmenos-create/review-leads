@@ -81,11 +81,19 @@ class PlacesService:
         }
 
     @staticmethod
+    def _localized_text(value: Any) -> str:
+        if isinstance(value, dict):
+            return (value.get("text") or "").strip()
+        if isinstance(value, str):
+            return value.strip()
+        return ""
+
+    @staticmethod
     def extract_reviews(place: dict[str, Any]) -> list[dict[str, Any]]:
         reviews = place.get("reviews") or []
         result: list[dict[str, Any]] = []
         for review in reviews:
-            text = (review.get("text") or "").strip()
+            text = PlacesService._localized_text(review.get("text"))
             if not text:
                 continue
             author = None

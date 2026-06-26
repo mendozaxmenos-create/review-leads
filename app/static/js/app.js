@@ -26,6 +26,7 @@ let leads = [];
 let categorySuggestions = [];
 let selectedIds = new Set();
 let activeFilter = "all";
+let hasSearched = false;
 let activeLeadForBot = null;
 let botMessages = [];
 let currentMessageBody = "";
@@ -47,6 +48,7 @@ const els = {
   loadingText: document.getElementById("loading-text"),
   statPlaces: document.getElementById("stat-places"),
   statReviews: document.getElementById("stat-reviews"),
+  statLeads: document.getElementById("stat-leads"),
   statSelected: document.getElementById("stat-selected"),
   selectAll: document.getElementById("select-all"),
   exportBtn: document.getElementById("export-btn"),
@@ -255,21 +257,34 @@ function contactsHtml(lead) {
 function renderResults() {
   const visible = filteredLeads();
 
-  if (!leads.length) {
+  if (!hasSearched) {
     els.results.innerHTML = `
       <div class="empty">
         <div class="empty-icon">🔍</div>
         <p>Configurá la zona en el mapa, elegí un servicio y tocá <strong>Buscar leads</strong>.</p>
       </div>`;
     els.summary.hidden = true;
-    updateStats(0, 0);
     return;
   }
 
-  els.summary.hidden = false;
+  els.summary.hidden = !els.summary.textContent;
+
+  if (!leads.length) {
+    els.results.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <p><strong>No se encontraron leads</strong> en esta búsqueda.</p>
+        <p class="empty-hint">Probá aumentar el radio o la cantidad de lugares, o usá una categoría sugerida abajo.</p>
+      </div>`;
+    return;
+  }
 
   if (!visible.length) {
-    els.results.innerHTML = `<div class="empty"><p>No hay leads con el filtro seleccionado.</p></div>`;
+    els.results.innerHTML = `
+      <div class="empty">
+        <p>No hay leads con el filtro <strong>${activeFilter}</strong>.</p>
+        <p class="empty-hint">Probá el filtro <strong>Todos</strong> o <strong>Low</strong>.</p>
+      </div>`;
     return;
   }
 
@@ -508,6 +523,7 @@ async function sendBotReply() {
 function updateStats(places, reviews) {
   els.statPlaces.textContent = places;
   els.statReviews.textContent = reviews;
+  els.statLeads.textContent = leads.length;
   updateSelectedCount();
 }
 
@@ -531,10 +547,16 @@ async function runSearch() {
       project_id: els.projectSelect.value,
     });
 
+    hasSearched = true;
     leads = data.leads || [];
     categorySuggestions = data.category_suggestions || [];
     selectedIds.clear();
+    activeFilter = "all";
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.filter === "all");
+    });
     els.summary.textContent = data.summary || "";
+    els.summary.hidden = !data.summary;
     updateStats(data.places_scanned || 0, data.reviews_analyzed || 0);
     renderSuggestions();
     renderResults();
