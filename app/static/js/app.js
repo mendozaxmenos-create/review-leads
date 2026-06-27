@@ -58,6 +58,7 @@ const els = {
   messageModalBody: document.getElementById("message-modal-body"),
   copyMessageBtn: document.getElementById("copy-message-btn"),
   whatsappOpenBtn: document.getElementById("whatsapp-open-btn"),
+  emailOpenBtn: document.getElementById("email-open-btn"),
   botDrawer: document.getElementById("bot-drawer"),
   botTitle: document.getElementById("bot-title"),
   botSubtitle: document.getElementById("bot-subtitle"),
@@ -69,8 +70,8 @@ const els = {
   botNextAction: document.getElementById("bot-next-action"),
 };
 
-function leadId(lead, index) {
-  return `${lead.place_id}-${index}`;
+function leadId(lead) {
+  return lead.place_id;
 }
 
 function leadInputFrom(lead) {
@@ -79,12 +80,23 @@ function leadInputFrom(lead) {
     place_id: lead.place_id,
     address: lead.address,
     phone: lead.phone,
+    email: lead.email,
     website: lead.website,
+    themes: lead.themes || [],
+    reviews_count: lead.reviews_count || 1,
     review_text: lead.review_text,
     lead_fit: lead.lead_fit,
     reason: lead.reason,
     suggested_pitch: lead.suggested_pitch,
   };
+}
+
+function whatsappHref(phone, message = "") {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  const text = message ? `?text=${encodeURIComponent(message.slice(0, 500))}` : "";
+  return `https://wa.me/${digits}${text}`;
 }
 
 function projectPayload() {
@@ -243,7 +255,14 @@ function filteredLeads() {
 function contactsHtml(lead) {
   const parts = [];
   if (lead.phone) {
+    const wa = whatsappHref(lead.phone);
     parts.push(`<a class="contact-link" href="tel:${escapeHtml(lead.phone)}">📞 ${escapeHtml(lead.phone)}</a>`);
+    if (wa) {
+      parts.push(`<a class="contact-link" href="${escapeHtml(wa)}" target="_blank" rel="noopener">💬 WhatsApp</a>`);
+    }
+  }
+  if (lead.email) {
+    parts.push(`<a class="contact-link" href="mailto:${escapeHtml(lead.email)}">✉️ ${escapeHtml(lead.email)}</a>`);
   }
   if (lead.website) {
     parts.push(`<a class="contact-link" href="${escapeHtml(lead.website)}" target="_blank" rel="noopener">🌐 Web</a>`);
@@ -251,7 +270,44 @@ function contactsHtml(lead) {
   if (lead.google_maps_url) {
     parts.push(`<a class="contact-link" href="${escapeHtml(lead.google_maps_url)}" target="_blank" rel="noopener">📍 Maps</a>`);
   }
-  return parts.length ? `<div class="contacts">${parts.join("")}</div>` : `<div class="contacts"><span class="suggestion-meta">Sin teléfono/web en Google</span></div>`;
+  return parts.length ? `<div class="contacts">${parts.join("")}</div>` : `<div class="contacts"><span class="suggestion-meta">Sin teléfono/email en Google</span></div>`;
+}
+
+function themesHtml(lead) {
+  const counts = lead.theme_counts || {};
+  const themes = lead.themes || [];
+  if (!themes.length) return "";
+  return `
+    <div class="themes">
+      <span class="themes-label">Quejas detectadas:</span>
+      ${themes
+        .map((theme) => {
+          const count = counts[theme];
+          const label = count > 1 ? `${escapeHtml(theme)} (${count})` : escapeHtml(theme);
+          return `<span class="theme-tag">${label}</span>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+function reviewSamplesHtml(lead) {
+  const samples = lead.review_samples || [];
+  if (!samples.length) {
+    return `<p class="review-text">"${escapeHtml(lead.review_text)}"</p>`;
+  }
+  return `
+    <div class="review-samples">
+      ${samples
+        .slice(0, 3)
+        .map(
+          (sample) => `
+        <blockquote class="review-sample">
+          ${sample.theme ? `<span class="theme-tag theme-tag-sm">${escapeHtml(sample.theme)}</span>` : ""}
+          "${escapeHtml(sample.text)}"
+        </blockquote>`
+        )
+        .join("")}
+    </div>`;
 }
 
 function renderResults() {
@@ -290,11 +346,12 @@ function renderResults() {
 
   els.results.innerHTML = visible
     .map((lead) => {
-      const idx = leads.indexOf(lead);
-      const id = leadId(lead, idx);
+      const id = leadId(lead);
       const checked = selectedIds.has(id) ? "checked" : "";
       const selectedClass = selectedIds.has(id) ? "selected" : "";
-      const stars = lead.review_rating ? `${"★".repeat(lead.review_rating)}${"☆".repeat(5 - lead.review_rating)}` : "";
+      const reviewsLabel = lead.reviews_count > 1 ? `${lead.reviews_count} reseñas` : "1 reseña";
+      const waDisabled = lead.phone ? "" : " disabled title=\"Sin teléfono en Google\"";
+      const emailDisabled = lead.email ? "" : " disabled title=\"Google no publica email para este negocio\"";
 
       return `
         <article class="lead-card ${selectedClass}" data-id="${id}">
@@ -307,15 +364,16 @@ function renderResults() {
             <p class="meta">
               ${escapeHtml(lead.address || "Sin dirección")}
               ${lead.rating ? ` · ⭐ ${lead.rating}` : ""}
-              ${lead.author ? ` · ${escapeHtml(lead.author)}` : ""}
-              ${stars ? ` · ${stars}` : ""}
+              · ${reviewsLabel}
             </p>
             ${contactsHtml(lead)}
-            <p class="review-text">"${escapeHtml(lead.review_text)}"</p>
-            <p class="reason"><strong>Por qué es lead:</strong> ${escapeHtml(lead.reason)}</p>
+            ${themesHtml(lead)}
+            ${reviewSamplesHtml(lead)}
+            <p class="reason"><strong>Resumen:</strong> ${escapeHtml(lead.reason)}</p>
             ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch sugerido:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
             <div class="lead-actions">
-              <button type="button" class="btn btn-secondary btn-sm" data-action="message" data-id="${id}">Escribir mensaje</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-action="whatsapp" data-id="${id}"${waDisabled}>WhatsApp</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-action="email" data-id="${id}"${emailDisabled}>Email</button>
               <button type="button" class="btn btn-secondary btn-sm" data-action="bot" data-id="${id}">Bot de ventas</button>
             </div>
           </div>
@@ -350,9 +408,14 @@ function renderResults() {
       toggle();
     });
 
-    card.querySelector('[data-action="message"]')?.addEventListener("click", (e) => {
+    card.querySelector('[data-action="whatsapp"]')?.addEventListener("click", (e) => {
       e.stopPropagation();
-      openMessageForLead(id);
+      openMessageForLead(id, "whatsapp");
+    });
+
+    card.querySelector('[data-action="email"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMessageForLead(id, "email");
     });
 
     card.querySelector('[data-action="bot"]')?.addEventListener("click", (e) => {
@@ -369,16 +432,25 @@ function escapeHtml(text) {
 }
 
 function getLeadById(id) {
-  const idx = leads.findIndex((lead, i) => leadId(lead, i) === id);
-  return idx >= 0 ? { lead: leads[idx], idx } : null;
+  const lead = leads.find((item) => leadId(item) === id);
+  return lead ? { lead } : null;
 }
 
 function showMessageModal(title, html, message) {
   document.getElementById("modal-title").textContent = title;
-  els.messageModalBody.innerHTML = html;
+  let bodyHtml = html;
+  if (message.contact_phone) {
+    bodyHtml += `<p class="contact-note">Teléfono Google: ${escapeHtml(message.contact_phone)}</p>`;
+  }
+  if (message.contact_email) {
+    bodyHtml += `<p class="contact-note">Email Google: ${escapeHtml(message.contact_email)}</p>`;
+  }
+  els.messageModalBody.innerHTML = bodyHtml;
   currentMessageBody = message.body || message;
   els.whatsappOpenBtn.hidden = !message.whatsapp_link;
   if (message.whatsapp_link) els.whatsappOpenBtn.href = message.whatsapp_link;
+  els.emailOpenBtn.hidden = !message.email_link;
+  if (message.email_link) els.emailOpenBtn.href = message.email_link;
   els.messageModal.hidden = false;
 }
 
@@ -386,22 +458,33 @@ function closeMessageModal() {
   els.messageModal.hidden = true;
 }
 
-async function openMessageForLead(id) {
+async function openMessageForLead(id, channel = "whatsapp") {
   const found = getLeadById(id);
   if (!found) return;
 
-  setLoading(true, "Generando mensaje personalizado…");
+  if (channel === "whatsapp" && !found.lead.phone) {
+    showError("Este negocio no tiene teléfono en Google.");
+    return;
+  }
+  if (channel === "email" && !found.lead.email) {
+    showError("Google no publica email para este negocio.");
+    return;
+  }
+
+  setLoading(true, channel === "email" ? "Generando email…" : "Generando mensaje de WhatsApp…");
   try {
     const data = await apiPost("/api/outreach/message", {
       lead: leadInputFrom(found.lead),
       ...projectPayload(),
-      channel: "whatsapp",
+      channel,
     });
 
     const html = `
+      ${data.subject ? `<p><strong>Asunto:</strong> ${escapeHtml(data.subject)}</p>` : ""}
       <p>${escapeHtml(data.body)}</p>
       ${data.tips ? `<div class="message-tips"><strong>Tip:</strong> ${escapeHtml(data.tips)}</div>` : ""}`;
-    showMessageModal(`Mensaje para ${found.lead.place_name}`, html, data);
+    const title = channel === "email" ? `Email para ${found.lead.place_name}` : `WhatsApp para ${found.lead.place_name}`;
+    showMessageModal(title, html, data);
   } catch (err) {
     showError(err.message);
   } finally {
@@ -411,7 +494,7 @@ async function openMessageForLead(id) {
 
 async function openBulkMessages() {
   const selected = leads
-    .map((lead, idx) => ({ lead, id: leadId(lead, idx) }))
+    .map((lead) => ({ lead, id: leadId(lead) }))
     .filter(({ id }) => selectedIds.has(id));
 
   if (!selected.length) return;
@@ -430,7 +513,8 @@ async function openBulkMessages() {
         <div class="bulk-message-item">
           <h4>${escapeHtml(item.place_name)}</h4>
           <p>${escapeHtml(item.message.body)}</p>
-          ${item.message.whatsapp_link ? `<a class="contact-link" href="${escapeHtml(item.message.whatsapp_link)}" target="_blank" rel="noopener">Abrir WhatsApp</a>` : ""}
+          ${item.message.whatsapp_link ? `<a class="contact-link" href="${escapeHtml(item.message.whatsapp_link)}" target="_blank" rel="noopener">Abrir WhatsApp (${escapeHtml(item.message.contact_phone || "")})</a>` : ""}
+          ${item.message.email_link ? `<a class="contact-link" href="${escapeHtml(item.message.email_link)}">Abrir email (${escapeHtml(item.message.contact_email || "")})</a>` : ""}
         </div>`
       )
       .join("");
@@ -569,23 +653,23 @@ async function runSearch() {
 
 function exportSelected() {
   const rows = leads
-    .map((lead, idx) => ({ lead, id: leadId(lead, idx) }))
+    .map((lead) => ({ lead, id: leadId(lead) }))
     .filter(({ id }) => selectedIds.has(id))
     .map(({ lead }) => lead);
 
   if (!rows.length) return;
 
   const headers = [
-    "negocio", "telefono", "web", "direccion", "rating_negocio", "autor_resena",
-    "rating_resena", "relevancia", "resena", "razon", "pitch", "place_id", "google_maps",
+    "negocio", "telefono", "email", "web", "direccion", "rating_negocio",
+    "relevancia", "temas", "cantidad_resenas", "resenas", "razon", "pitch", "place_id", "google_maps",
   ];
 
   const csvLines = [
     headers.join(","),
     ...rows.map((r) =>
       [
-        r.place_name, r.phone || "", r.website || "", r.address || "", r.rating ?? "",
-        r.author || "", r.review_rating ?? "", r.lead_fit, r.review_text, r.reason,
+        r.place_name, r.phone || "", r.email || "", r.website || "", r.address || "", r.rating ?? "",
+        r.lead_fit, (r.themes || []).join("; "), r.reviews_count || 1, r.review_text, r.reason,
         r.suggested_pitch || "", r.place_id, r.google_maps_url || "",
       ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
     ),
@@ -640,7 +724,7 @@ function bindEvents() {
   });
 
   els.selectAll.addEventListener("click", () => {
-    filteredLeads().forEach((lead) => selectedIds.add(leadId(lead, leads.indexOf(lead))));
+    filteredLeads().forEach((lead) => selectedIds.add(leadId(lead)));
     renderResults();
   });
 

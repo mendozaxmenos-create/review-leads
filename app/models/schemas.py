@@ -54,18 +54,30 @@ class SearchRequest(BaseModel):
         return self
 
 
+class ReviewSnippet(BaseModel):
+    text: str
+    rating: int | None = None
+    author: str | None = None
+    theme: str | None = None
+
+
 class ReviewLead(BaseModel):
     place_name: str
     place_id: str
     address: str | None = None
     phone: str | None = None
+    email: str | None = None
     website: str | None = None
     google_maps_url: str | None = None
     rating: float | None = None
+    lead_fit: LeadFit
+    themes: list[str] = []
+    theme_counts: dict[str, int] = {}
+    reviews_count: int = 1
+    review_samples: list[ReviewSnippet] = []
     review_text: str
     review_rating: int | None = None
     author: str | None = None
-    lead_fit: LeadFit
     reason: str
     suggested_pitch: str | None = None
 
@@ -98,7 +110,10 @@ class LeadInput(BaseModel):
     place_id: str
     address: str | None = None
     phone: str | None = None
+    email: str | None = None
     website: str | None = None
+    themes: list[str] = []
+    reviews_count: int = 1
     review_text: str
     lead_fit: str
     reason: str
@@ -117,6 +132,9 @@ class OutreachMessage(BaseModel):
     subject: str | None = None
     body: str
     whatsapp_link: str | None = None
+    email_link: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
     tips: str | None = None
 
 

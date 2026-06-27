@@ -11,6 +11,7 @@ oportunidades comerciales según un proyecto/servicio del usuario.
 Responde SOLO con JSON válido, sin markdown, con esta estructura:
 {
   "lead_fit": "high" | "medium" | "low" | "none",
+  "theme": "etiqueta corta del dolor en español, ej: Tiempos de espera, Mala atención, Falta de reservas",
   "reason": "explicación breve en español",
   "suggested_pitch": "mensaje corto de contacto o null si no aplica"
 }
@@ -20,6 +21,8 @@ Criterios:
 - medium: hay señales indirectas o contexto parcialmente alineado
 - low: mención vaga, poco accionable
 - none: sin relación con el proyecto
+
+Para theme: usá 2-4 palabras, concreto y reutilizable entre reseñas similares.
 """
 
 
@@ -39,7 +42,7 @@ class ReviewClassifier:
         place_address: str | None,
         review_text: str,
         review_rating: int | None,
-    ) -> tuple[LeadFit, str, str | None]:
+    ) -> tuple[LeadFit, str, str, str | None]:
         criteria_block = f"\nCriterios adicionales: {lead_criteria}" if lead_criteria else ""
         user_content = f"""Proyecto/servicio a vender:
 {project_description}
@@ -67,9 +70,10 @@ Reseña:
         data = json.loads(raw)
 
         fit = LeadFit(data.get("lead_fit", "none"))
+        theme = (data.get("theme") or "Otro").strip()
         reason = data.get("reason", "Sin razón")
         pitch = data.get("suggested_pitch")
-        return fit, reason, pitch
+        return fit, theme, reason, pitch
 
     async def summarize_leads(
         self,

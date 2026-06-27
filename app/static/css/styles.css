@@ -454,6 +454,56 @@ input[type="range"] {
   margin-top: 0.65rem;
 }
 
+.themes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+}
+
+.themes-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+
+.theme-tag {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 0.78rem;
+}
+
+.theme-tag-sm {
+  margin-bottom: 0.35rem;
+}
+
+.review-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.review-sample {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-left: 3px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.contact-note {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .suggestions-box {
   margin: 0 1.25rem 2rem;
   padding: 1rem;

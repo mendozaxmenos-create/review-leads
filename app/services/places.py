@@ -76,6 +76,7 @@ class PlacesService:
         phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber")
         return {
             "phone": phone,
+            "email": None,
             "website": place.get("websiteUri"),
             "google_maps_url": place.get("googleMapsUri"),
         }
