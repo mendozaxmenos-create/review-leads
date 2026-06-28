@@ -8,7 +8,7 @@ from app.config import settings
 PLACES_BASE = "https://places.googleapis.com/v1"
 FIELD_MASK_SEARCH = "places.id,places.displayName,places.formattedAddress,places.rating"
 FIELD_MASK_DETAILS = (
-    "id,displayName,formattedAddress,rating,"
+    "id,displayName,formattedAddress,rating,location,"
     "nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,"
     "reviews.text,reviews.rating,reviews.authorAttribution.displayName"
 )
@@ -72,6 +72,13 @@ class PlacesService:
         return display.get("text", "Sin nombre")
 
     @staticmethod
+    def extract_location(place: dict[str, Any]) -> tuple[float | None, float | None]:
+        location = place.get("location") or {}
+        lat = location.get("latitude")
+        lng = location.get("longitude")
+        return lat, lng
+
+    @staticmethod
     def extract_contacts(place: dict[str, Any]) -> dict[str, str | None]:
         phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber")
         return {
@@ -109,3 +116,37 @@ class PlacesService:
                 }
             )
         return result
+
+    @staticmethod
+    def select_reviews_for_analysis(
+        reviews: list[dict[str, Any]],
+        *,
+        max_review_rating: int | None,
+        max_reviews_per_place: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        skipped = 0
+        candidates = list(reviews)
+
+        if max_review_rating is not None:
+            filtered: list[dict[str, Any]] = []
+            for review in candidates:
+                rating = review.get("rating")
+                if rating is None or rating <= max_review_rating:
+                    filtered.append(review)
+                else:
+                    skipped += 1
+            candidates = filtered
+
+        def sort_key(review: dict[str, Any]) -> tuple[bool, int]:
+            rating = review.get("rating")
+            if rating is None:
+                return (True, 99)
+            return (False, rating)
+
+        candidates.sort(key=sort_key)
+
+        if len(candidates) > max_reviews_per_place:
+            skipped += len(candidates) - max_reviews_per_place
+            candidates = candidates[:max_reviews_per_place]
+
+        return candidates, skipped

@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -6,14 +7,23 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import outreach, projects, search
+from app.db.store import get_store
+from app.routers import history, outreach, projects, search
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_store().init()
+    yield
+
 
 app = FastAPI(
     title="Review Leads",
     description="Busca reseñas de Google en una zona y clasifica leads potenciales con IA",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -28,6 +38,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(projects.router)
 app.include_router(search.router)
 app.include_router(outreach.router)
+app.include_router(history.router)
 
 
 @app.get("/")

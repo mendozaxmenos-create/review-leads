@@ -21,6 +21,18 @@ class ServiceProfileOut(BaseModel):
     description: str
     lead_criteria: str
     suggested_business_types: list[str]
+    is_custom: bool = False
+
+
+class CustomProjectCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80)
+    description: str = Field(..., min_length=10)
+    lead_criteria: str = Field(..., min_length=10)
+    suggested_business_types: list[str] = Field(default_factory=list)
+
+
+class CustomProjectUpdate(CustomProjectCreate):
+    pass
 
 
 class SearchRequest(BaseModel):
@@ -46,6 +58,25 @@ class SearchRequest(BaseModel):
         default=None,
         description="Criterios adicionales opcionales para considerar un lead",
     )
+    max_review_rating: int | None = Field(
+        default=3,
+        ge=1,
+        le=5,
+        description="Solo analizar reseñas con rating <= este valor. null = analizar todas",
+    )
+    max_place_rating: float | None = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description="Solo negocios con rating <= este valor. null = sin filtro",
+    )
+    max_reviews_per_place: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Máximo de reseñas a clasificar con IA por negocio (prioriza las peores)",
+    )
+    use_cache: bool = Field(default=True, description="Usar caché local de búsquedas recientes")
 
     @model_validator(mode="after")
     def require_project_source(self) -> "SearchRequest":
@@ -65,6 +96,8 @@ class ReviewLead(BaseModel):
     place_name: str
     place_id: str
     address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
     phone: str | None = None
     email: str | None = None
     website: str | None = None
@@ -80,6 +113,9 @@ class ReviewLead(BaseModel):
     author: str | None = None
     reason: str
     suggested_pitch: str | None = None
+    saved_lead_id: int | None = None
+    status: str | None = None
+    notes: str | None = None
 
 
 class CategorySuggestion(BaseModel):
@@ -99,7 +135,12 @@ class SearchResponse(BaseModel):
     project_id: str | None = None
     project_name: str | None = None
     places_scanned: int
-    reviews_analyzed: int
+    reviews_fetched: int = 0
+    reviews_classified: int = 0
+    reviews_skipped: int = 0
+    reviews_analyzed: int = 0
+    from_cache: bool = False
+    search_history_id: int | None = None
     leads: list[ReviewLead]
     summary: str
     category_suggestions: list[CategorySuggestion] = []
@@ -172,3 +213,39 @@ class BulkMessageItem(BaseModel):
 
 class BulkMessageResponse(BaseModel):
     messages: list[BulkMessageItem]
+
+
+class LeadStatus(str, Enum):
+    NEW = "new"
+    CONTACTED = "contacted"
+    RESPONDED = "responded"
+    CLOSED = "closed"
+    DISCARDED = "discarded"
+
+
+class SavedLeadUpdate(BaseModel):
+    status: LeadStatus
+    notes: str | None = None
+
+
+class SavedLeadOut(BaseModel):
+    id: int
+    place_id: str
+    status: str
+    notes: str | None = None
+    updated_at: str
+    lead: ReviewLead
+
+
+class SearchHistoryItem(BaseModel):
+    id: int
+    created_at: str
+    project_id: str | None = None
+    project_name: str | None = None
+    business_type: str
+    center_lat: float
+    center_lng: float
+    radius_km: float
+    places_scanned: int
+    leads_count: int
+    from_cache: bool

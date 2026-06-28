@@ -97,7 +97,12 @@ _PROFILES_BY_ID = {profile.id: profile for profile in SERVICE_PROFILES}
 
 
 def get_profile(profile_id: str) -> ServiceProfile | None:
-    return _PROFILES_BY_ID.get(profile_id)
+    profile = _PROFILES_BY_ID.get(profile_id)
+    if profile:
+        return profile
+    from app.db.store import get_store
+
+    return get_store().get_custom_profile(project_id)
 
 
 def list_profiles() -> list[ServiceProfile]:

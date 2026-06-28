@@ -14,8 +14,13 @@
   </head>
   <body>
     <header>
-      <h1>Review Leads</h1>
-      <p>Encontrá clientes potenciales según reseñas de Google en tu zona</p>
+      <div class="header-row">
+        <div>
+          <h1>Review Leads</h1>
+          <p>Encontrá clientes potenciales según reseñas de Google en tu zona</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="history-btn">Historial</button>
+      </div>
     </header>
 
     <div class="layout">
@@ -56,6 +61,46 @@
           <input type="number" id="max-places" min="1" max="60" value="15" />
         </section>
 
+        <section class="panel">
+          <h2>Filtros de calidad</h2>
+          <label class="checkbox-row">
+            <input type="checkbox" id="filter-negative-reviews" checked />
+            Solo reseñas ≤ 3 estrellas
+          </label>
+          <label for="max-reviews-per-place">Máx. reseñas por negocio (IA)</label>
+          <input type="number" id="max-reviews-per-place" min="1" max="20" value="5" />
+          <label for="max-place-rating">Rating máx. del negocio (opcional)</label>
+          <input
+            type="number"
+            id="max-place-rating"
+            min="1"
+            max="5"
+            step="0.1"
+            placeholder="Ej: 4.0 — vacío = todos"
+          />
+          <p class="map-hint">Prioriza reseñas peores y reduce costo de OpenAI.</p>
+          <label class="checkbox-row">
+            <input type="checkbox" id="use-cache" checked />
+            Usar caché (24 h)
+          </label>
+        </section>
+
+        <section class="panel" id="custom-project-panel">
+          <h2>Servicio propio</h2>
+          <label for="custom-name">Nombre</label>
+          <input type="text" id="custom-name" placeholder="Ej: Automatización WhatsApp" />
+          <label for="custom-description">Descripción</label>
+          <textarea id="custom-description" rows="3" placeholder="Qué vendés y a quién…"></textarea>
+          <label for="custom-criteria">Criterios de lead</label>
+          <textarea id="custom-criteria" rows="2" placeholder="Qué quejas o dolores buscás…"></textarea>
+          <label for="custom-types">Tipos de negocio sugeridos (coma)</label>
+          <input type="text" id="custom-types" placeholder="restaurant, store, gym" />
+          <div class="row-2">
+            <button type="button" class="btn btn-secondary btn-sm" id="save-custom-btn">Guardar servicio</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="delete-custom-btn" hidden>Eliminar</button>
+          </div>
+        </section>
+
         <button type="button" class="btn btn-primary" id="search-btn">
           Buscar leads
         </button>
@@ -66,7 +111,7 @@
           <div class="toolbar-left">
             <div class="stats">
               <span class="stat">Lugares: <strong id="stat-places">0</strong></span>
-              <span class="stat">Reseñas: <strong id="stat-reviews">0</strong></span>
+              <span class="stat">Reseñas IA: <strong id="stat-reviews">0</strong></span>
               <span class="stat">Leads: <strong id="stat-leads">0</strong></span>
               <span class="stat">Seleccionados: <strong id="stat-selected">0</strong></span>
             </div>
@@ -90,6 +135,10 @@
             <button type="button" class="btn btn-secondary btn-sm" id="messages-btn" disabled>
               Mensajes seleccionados
             </button>
+            <select id="bulk-channel" class="bulk-channel">
+              <option value="whatsapp">WhatsApp</option>
+              <option value="email">Email</option>
+            </select>
           </div>
         </div>
 
@@ -123,6 +172,20 @@
             Abrir email
           </a>
         </div>
+      </div>
+    </div>
+
+    <div class="drawer" id="history-drawer" hidden>
+      <div class="drawer-backdrop" data-close-history></div>
+      <div class="drawer-panel history-panel">
+        <div class="drawer-header">
+          <div>
+            <h2>Historial de búsquedas</h2>
+            <p>Búsquedas guardadas localmente</p>
+          </div>
+          <button type="button" class="icon-btn" data-close-history aria-label="Cerrar">✕</button>
+        </div>
+        <div class="history-list" id="history-list"></div>
       </div>
     </div>
 

@@ -34,6 +34,10 @@ Edita `.env` con tus claves:
 GOOGLE_PLACES_API_KEY=tu_clave
 OPENAI_API_KEY=tu_clave
 OPENAI_MODEL=gpt-4o-mini
+
+# Opcional — persistencia local
+DATABASE_PATH=data/review-leads.db
+CACHE_TTL_HOURS=24
 ```
 
 ## Ejecutar
@@ -57,8 +61,14 @@ Desde la UI podés:
 - **WhatsApp**: genera mensaje y abre `wa.me` con el teléfono de Google
 - **Email**: genera mensaje y abre `mailto:` si hay email (ver limitación abajo)
 - **Bot de ventas**: simula conversación para cerrar el lead
-- **Mensajes masivos** para leads seleccionados
+- **Mensajes masivos** para leads seleccionados (WhatsApp o email)
 - **Sugerencias de categoría** cuando hay pocos leads o la categoría no encaja
+- **Filtros de calidad**: reseñas ≤ 3★, límite por negocio, rating máximo del local
+- **Caché** de búsquedas (24 h) para repetir la misma zona sin gastar APIs
+- **Servicio propio**: crear/editar/eliminar perfiles de venta custom
+- **Historial** de búsquedas anteriores (botón en el header)
+- **Estado del lead** en cada tarjeta (Nuevo → Contactado → Cerrado…)
+- **Pins en el mapa** con la ubicación de cada lead
 
 ## Modelo de lead (por negocio)
 
@@ -71,6 +81,8 @@ Cada lead representa **un negocio**, no una reseña suelta:
 | `reviews_count` | Cantidad de reseñas relevantes del negocio |
 | `review_samples` | Hasta 3 reseñas con su tema |
 | `phone` / `website` / `google_maps_url` | Contactos desde Google Places |
+| `lat` / `lng` | Ubicación del negocio (para pins en mapa) |
+| `status` / `saved_lead_id` | Estado CRM persistido en SQLite |
 
 La clasificación IA devuelve por reseña: `lead_fit`, `theme`, `reason`, `suggested_pitch`. El backend agrupa por `place_id` en `app/routers/search.py`.
 
@@ -101,7 +113,17 @@ Endpoints de outreach (`app/routers/outreach.py`):
 | `apps` | Apps y desarrollo web |
 | `cursor-dev` | Desarrollo ágil con Cursor |
 
-Definidos en `app/data/services.py`. Cada uno incluye `suggested_business_types` para las sugerencias de categoría.
+Definidos en `app/data/services.py`. Podés agregar servicios propios vía UI o API (ver abajo).
+
+### Servicios custom
+
+| Método | Ruta | Función |
+|--------|------|---------|
+| `POST` | `/api/projects/custom` | Crear servicio propio |
+| `PUT` | `/api/projects/custom/{id}` | Editar servicio propio |
+| `DELETE` | `/api/projects/custom/{id}` | Eliminar servicio propio |
+
+Los IDs custom tienen prefijo `custom-`.
 
 ## Estructura del proyecto
 
@@ -111,10 +133,14 @@ app/
 ├── config.py               # Settings desde .env
 ├── models/schemas.py       # Pydantic (Search, Lead, Outreach)
 ├── routers/
-│   ├── search.py           # POST /api/search — búsqueda y agrupación
-│   ├── projects.py         # GET /api/projects
+│   ├── search.py           # POST /api/search — búsqueda, caché y agrupación
+│   ├── projects.py         # GET /api/projects + CRUD servicios custom
+│   ├── history.py          # Historial de búsquedas y estado de leads
 │   └── outreach.py         # Mensajes y bot
+├── db/
+│   └── store.py            # SQLite: caché, proyectos, historial, leads
 ├── services/
+│   ├── cache.py            # Claves de caché de búsqueda
 │   ├── places.py           # Google Places API
 │   ├── classifier.py       # Clasificación OpenAI + themes
 │   ├── category_suggester.py
@@ -141,6 +167,56 @@ Valores válidos para `business_type`: `restaurant`, `cafe`, `gym`, `store`, `ha
 
 [Lista completa de tipos](https://developers.google.com/maps/documentation/places/web-service/place-types)
 
+## Filtros de calidad (UI y API)
+
+Parámetros opcionales en `POST /api/search`:
+
+| Parámetro | Default | Descripción |
+|-----------|---------|-------------|
+| `max_review_rating` | `3` | Solo clasifica reseñas con rating ≤ este valor. `null` = todas |
+| `max_reviews_per_place` | `5` | Máximo de reseñas enviadas a OpenAI por negocio (prioriza las peores) |
+| `max_place_rating` | `null` | Solo negocios con rating ≤ este valor |
+| `use_cache` | `true` | Reutilizar resultado cacheado (misma zona + filtros + servicio) |
+
+La respuesta incluye `reviews_fetched`, `reviews_classified`, `reviews_skipped`, `from_cache` y `search_history_id`.
+
+## Caché, historial y CRM liviano
+
+Persistencia local en SQLite (`data/review-leads.db`, configurable en `.env`):
+
+| Función | API / UI |
+|---------|----------|
+| Caché de búsquedas (24 h) | `use_cache: true` · checkbox en UI |
+| Historial de búsquedas | `GET /api/history/searches` · botón **Historial** |
+| Recuperar búsqueda | `GET /api/history/searches/{id}` |
+| Estado del lead | `PATCH /api/history/leads/{id}` · selector en cada tarjeta |
+| Servicios propios | `POST/PUT/DELETE /api/projects/custom` · panel **Servicio propio** |
+
+Estados de lead: `new`, `contacted`, `responded`, `closed`, `discarded`.
+
+| Método | Ruta | Función |
+|--------|------|---------|
+| `GET` | `/api/history/searches` | Listar búsquedas guardadas |
+| `GET` | `/api/history/searches/{id}` | Recuperar resultado completo |
+| `GET` | `/api/history/leads` | Listar leads guardados (`?status=contacted`) |
+| `PATCH` | `/api/history/leads/{id}` | Actualizar estado o notas |
+
+## Retomar el proyecto
+
+```bash
+cd review-leads
+.venv\Scripts\activate
+.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+1. Configurá `.env` (Google + OpenAI)
+2. Abrí http://127.0.0.1:8000
+3. Elegí zona, servicio y filtros → **Buscar leads**
+4. Revisá **Historial** para búsquedas anteriores
+5. Cambiá **Estado** en leads que ya contactaste
+
+La base SQLite (`data/review-leads.db`) guarda caché, servicios custom, historial y estados. Se crea sola al arrancar.
+
 ## Costos y rendimiento
 
 - Cada búsqueda llama a Google Places por cada lugar + detalle con reseñas.
@@ -150,23 +226,20 @@ Valores válidos para `business_type`: `restaurant`, `cafe`, `gym`, `store`, `ha
 
 ## Próximos pasos sugeridos
 
-Prioridad alta (impacto inmediato):
+Hecho recientemente:
 
-1. **Filtro por rating** — solo reseñas ≤ 3 estrellas o negocios con rating bajo (`SearchRequest` + UI)
-2. **Reducir costo OpenAI** — pre-filtrar reseñas negativas antes de clasificar; limitar reseñas por lugar
-3. **Cache** — SQLite/JSON con TTL para no repetir misma zona + categoría + servicio
+- Filtros de rating y límite de reseñas por negocio
+- Caché SQLite con TTL
+- Servicios custom (CRUD)
+- Historial de búsquedas + estado de leads
+- Pins de leads en mapa, progreso de búsqueda, canal bulk WhatsApp/email
 
-Producto:
+Pendiente:
 
-4. **Perfiles de proyecto propios** — CRUD de servicios (hoy hardcodeados en `services.py`)
-5. **Persistencia de leads** — historial de búsquedas, estado (contactado, respondió)
-6. **Email alternativo** — extraer contacto desde web del negocio (scraping o servicio externo), ya que Google no da email
-
-UX:
-
-7. **Progreso de búsqueda** — “Buscando lugares…”, “Analizando reseña 3/10…”
-8. **Pins en mapa** — marcar leads en el mapa Leaflet
-9. **Selector de canal en bulk** — WhatsApp vs email al generar mensajes masivos
+1. **Email alternativo** — extraer contacto desde web del negocio (Google no publica email)
+2. **Dashboard CRM** — vista filtrada de todos los leads guardados por estado
+3. **Invalidar caché** — botón para forzar búsqueda fresca sin desactivar caché global
+4. **Batch IA** — clasificar varias reseñas en una sola llamada OpenAI
 
 ## Historial reciente
 
@@ -175,3 +248,6 @@ UX:
 - Fix parseo de reseñas Google (texto localizado como objeto)
 - Leads agrupados por negocio con temas de queja
 - Links WhatsApp/email desde contactos reales de Google
+- Filtros de rating y límite de reseñas por negocio
+- SQLite: caché, historial, servicios custom, estado de leads
+- Pins en mapa, progreso de búsqueda, bulk por canal

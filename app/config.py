@@ -12,5 +12,8 @@ class Settings(BaseSettings):
     app_port: int = 8000
     debug: bool = True
 
+    database_path: str = "data/review-leads.db"
+    cache_ttl_hours: int = 24
+
 
 settings = Settings()

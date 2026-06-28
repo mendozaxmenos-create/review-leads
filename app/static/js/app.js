@@ -17,9 +17,18 @@ const BUSINESS_TYPES = [
   { value: "insurance_agency", label: "Seguros" },
 ];
 
+const LEAD_STATUSES = [
+  { value: "new", label: "Nuevo" },
+  { value: "contacted", label: "Contactado" },
+  { value: "responded", label: "Respondió" },
+  { value: "closed", label: "Cerrado" },
+  { value: "discarded", label: "Descartado" },
+];
+
 let map;
 let marker;
 let circle;
+let leadLayer;
 let center = { ...DEFAULT_CENTER };
 let projects = [];
 let leads = [];
@@ -30,6 +39,8 @@ let hasSearched = false;
 let activeLeadForBot = null;
 let botMessages = [];
 let currentMessageBody = "";
+let progressTimer = null;
+let lastSearchHistoryId = null;
 
 const els = {
   projectSelect: document.getElementById("project-select"),
@@ -38,6 +49,20 @@ const els = {
   radius: document.getElementById("radius"),
   radiusValue: document.getElementById("radius-value"),
   maxPlaces: document.getElementById("max-places"),
+  filterNegativeReviews: document.getElementById("filter-negative-reviews"),
+  maxReviewsPerPlace: document.getElementById("max-reviews-per-place"),
+  maxPlaceRating: document.getElementById("max-place-rating"),
+  useCache: document.getElementById("use-cache"),
+  customName: document.getElementById("custom-name"),
+  customDescription: document.getElementById("custom-description"),
+  customCriteria: document.getElementById("custom-criteria"),
+  customTypes: document.getElementById("custom-types"),
+  saveCustomBtn: document.getElementById("save-custom-btn"),
+  deleteCustomBtn: document.getElementById("delete-custom-btn"),
+  historyBtn: document.getElementById("history-btn"),
+  historyDrawer: document.getElementById("history-drawer"),
+  historyList: document.getElementById("history-list"),
+  bulkChannel: document.getElementById("bulk-channel"),
   addressSearch: document.getElementById("address-search"),
   searchBtn: document.getElementById("search-btn"),
   results: document.getElementById("results"),
@@ -118,6 +143,43 @@ function setLoading(visible, text) {
   if (text) els.loadingText.textContent = text;
 }
 
+async function apiGet(url) {
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
+  return data;
+}
+
+async function apiPut(url, body) {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
+  return data;
+}
+
+async function apiPatch(url, body) {
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
+  return data;
+}
+
+async function apiDelete(url) {
+  const res = await fetch(url, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.detail || "Error en la solicitud");
+  }
+}
+
 async function apiPost(url, body) {
   const res = await fetch(url, {
     method: "POST",
@@ -142,6 +204,7 @@ function initMap() {
   }).addTo(map);
 
   marker = L.marker([center.lat, center.lng], { draggable: true }).addTo(map);
+  leadLayer = L.layerGroup().addTo(map);
   updateCircle();
 
   marker.on("dragend", () => {
@@ -183,22 +246,86 @@ async function geocodeAddress(query) {
 }
 
 async function loadProjects() {
-  const res = await fetch("/api/projects");
-  projects = await res.json();
-  els.projectSelect.innerHTML = projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+  projects = await apiGet("/api/projects");
+  els.projectSelect.innerHTML = projects
+    .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}${p.is_custom ? " (propio)" : ""}</option>`)
+    .join("");
   els.businessType.innerHTML = BUSINESS_TYPES.map((t) => `<option value="${t.value}">${t.label}</option>`).join("");
   onProjectChange();
+}
+
+function fillCustomForm(project) {
+  if (!project) {
+    els.customName.value = "";
+    els.customDescription.value = "";
+    els.customCriteria.value = "";
+    els.customTypes.value = "";
+    return;
+  }
+  els.customName.value = project.name;
+  els.customDescription.value = project.description;
+  els.customCriteria.value = project.lead_criteria;
+  els.customTypes.value = (project.suggested_business_types || []).join(", ");
 }
 
 function onProjectChange() {
   const project = projects.find((p) => p.id === els.projectSelect.value);
   if (!project) return;
   els.serviceDesc.textContent = project.description;
+  els.deleteCustomBtn.hidden = !project.is_custom;
+  if (project.is_custom) fillCustomForm(project);
+  else fillCustomForm(null);
   if (project.suggested_business_types?.length) {
     const suggested = project.suggested_business_types[0];
     if ([...els.businessType.options].some((o) => o.value === suggested)) {
       els.businessType.value = suggested;
     }
+  }
+}
+
+async function saveCustomProject() {
+  const body = {
+    name: els.customName.value.trim(),
+    description: els.customDescription.value.trim(),
+    lead_criteria: els.customCriteria.value.trim(),
+    suggested_business_types: els.customTypes.value
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
+  };
+  if (body.name.length < 2 || body.description.length < 10 || body.lead_criteria.length < 10) {
+    showError("Completá nombre, descripción y criterios (mín. 10 caracteres en descripción/criterios).");
+    return;
+  }
+  hideError();
+  const current = projects.find((p) => p.id === els.projectSelect.value);
+  try {
+    if (current?.is_custom) {
+      await apiPut(`/api/projects/custom/${current.id}`, body);
+    } else {
+      const created = await apiPost("/api/projects/custom", body);
+      await loadProjects();
+      els.projectSelect.value = created.id;
+      onProjectChange();
+      return;
+    }
+    await loadProjects();
+    onProjectChange();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function deleteCustomProject() {
+  const current = projects.find((p) => p.id === els.projectSelect.value);
+  if (!current?.is_custom) return;
+  if (!confirm(`¿Eliminar el servicio "${current.name}"?`)) return;
+  try {
+    await apiDelete(`/api/projects/custom/${current.id}`);
+    await loadProjects();
+    fillCustomForm(null);
+  } catch (err) {
+    showError(err.message);
   }
 }
 
@@ -290,6 +417,145 @@ function themesHtml(lead) {
     </div>`;
 }
 
+function statusSelectHtml(lead, id) {
+  const current = lead.status || "new";
+  return `
+    <label class="status-label">
+      Estado
+      <select class="lead-status" data-id="${id}">
+        ${LEAD_STATUSES.map(
+          (s) => `<option value="${s.value}" ${current === s.value ? "selected" : ""}>${s.label}</option>`
+        ).join("")}
+      </select>
+    </label>`;
+}
+
+function renderLeadPins() {
+  if (!leadLayer) return;
+  leadLayer.clearLayers();
+  const colors = { high: "#22c55e", medium: "#f59e0b", low: "#94a3b8" };
+  leads.forEach((lead) => {
+    if (lead.lat == null || lead.lng == null) return;
+    L.circleMarker([lead.lat, lead.lng], {
+      radius: 8,
+      color: colors[lead.lead_fit] || "#3b82f6",
+      fillColor: colors[lead.lead_fit] || "#3b82f6",
+      fillOpacity: 0.85,
+      weight: 2,
+    })
+      .bindPopup(`<strong>${escapeHtml(lead.place_name)}</strong><br>${escapeHtml(lead.lead_fit)}`)
+      .addTo(leadLayer);
+  });
+}
+
+async function updateLeadStatus(id, status) {
+  const lead = leads.find((item) => leadId(item) === id);
+  if (!lead?.saved_lead_id) return;
+  try {
+    const updated = await apiPatch(`/api/history/leads/${lead.saved_lead_id}`, { status });
+    lead.status = updated.status;
+    lead.notes = updated.notes;
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function startSearchProgress() {
+  const steps = [
+    "Buscando negocios en Google…",
+    "Obteniendo reseñas…",
+    "Clasificando quejas con IA…",
+    "Agrupando leads por negocio…",
+  ];
+  let step = 0;
+  setLoading(true, steps[0]);
+  progressTimer = setInterval(() => {
+    step = (step + 1) % steps.length;
+    els.loadingText.textContent = steps[step];
+  }, 9000);
+}
+
+function stopSearchProgress() {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  setLoading(false);
+}
+
+function applySearchResponse(data) {
+  hasSearched = true;
+  leads = data.leads || [];
+  categorySuggestions = data.category_suggestions || [];
+  lastSearchHistoryId = data.search_history_id || null;
+  selectedIds.clear();
+  activeFilter = "all";
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.filter === "all");
+  });
+  let summaryText = data.summary || "";
+  if (data.from_cache) summaryText = `⚡ Desde caché. ${summaryText}`;
+  els.summary.textContent = summaryText;
+  els.summary.hidden = !summaryText;
+  updateStats(
+    data.places_scanned || 0,
+    data.reviews_classified ?? data.reviews_analyzed ?? 0,
+    data.reviews_skipped || 0
+  );
+  renderSuggestions();
+  renderResults();
+}
+
+async function openHistoryDrawer() {
+  els.historyDrawer.hidden = false;
+  try {
+    const items = await apiGet("/api/history/searches?limit=30");
+    if (!items.length) {
+      els.historyList.innerHTML = `<p class="empty-hint">Todavía no hay búsquedas guardadas.</p>`;
+      return;
+    }
+    els.historyList.innerHTML = items
+      .map(
+        (item) => `
+      <button type="button" class="history-item" data-history-id="${item.id}">
+        <strong>${new Date(item.created_at).toLocaleString("es-AR")}</strong>
+        <span>${escapeHtml(item.project_name || item.project_id || "Servicio")} · ${escapeHtml(item.business_type)} · ${item.leads_count} leads</span>
+        ${item.from_cache ? '<span class="history-cache">caché</span>' : ""}
+      </button>`
+      )
+      .join("");
+    els.historyList.querySelectorAll("[data-history-id]").forEach((btn) => {
+      btn.addEventListener("click", () => loadHistorySearch(Number(btn.dataset.historyId)));
+    });
+  } catch (err) {
+    els.historyList.innerHTML = `<p class="empty-hint">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function closeHistoryDrawer() {
+  els.historyDrawer.hidden = true;
+}
+
+async function loadHistorySearch(historyId) {
+  hideError();
+  startSearchProgress();
+  try {
+    const data = await apiGet(`/api/history/searches/${historyId}`);
+    if (data.center) {
+      center = data.center;
+      marker.setLatLng([center.lat, center.lng]);
+      map.setView([center.lat, center.lng], 14);
+      updateCircle();
+    }
+    applySearchResponse(data);
+    closeHistoryDrawer();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    stopSearchProgress();
+  }
+}
+
 function reviewSamplesHtml(lead) {
   const samples = lead.review_samples || [];
   if (!samples.length) {
@@ -369,6 +635,7 @@ function renderResults() {
             ${contactsHtml(lead)}
             ${themesHtml(lead)}
             ${reviewSamplesHtml(lead)}
+            ${statusSelectHtml(lead, id)}
             <p class="reason"><strong>Resumen:</strong> ${escapeHtml(lead.reason)}</p>
             ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch sugerido:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
             <div class="lead-actions">
@@ -422,7 +689,14 @@ function renderResults() {
       e.stopPropagation();
       openBotForLead(id);
     });
+
+    card.querySelector(".lead-status")?.addEventListener("change", (e) => {
+      e.stopPropagation();
+      updateLeadStatus(id, e.target.value);
+    });
   });
+
+  renderLeadPins();
 }
 
 function escapeHtml(text) {
@@ -504,7 +778,7 @@ async function openBulkMessages() {
     const data = await apiPost("/api/outreach/messages/bulk", {
       leads: selected.map(({ lead }) => leadInputFrom(lead)),
       ...projectPayload(),
-      channel: "whatsapp",
+      channel: els.bulkChannel.value,
     });
 
     const html = data.messages
@@ -604,11 +878,21 @@ async function sendBotReply() {
   }
 }
 
-function updateStats(places, reviews) {
+function updateStats(places, classified, skipped = 0) {
   els.statPlaces.textContent = places;
-  els.statReviews.textContent = reviews;
+  els.statReviews.textContent = skipped > 0 ? `${classified} (${skipped} omit.)` : classified;
   els.statLeads.textContent = leads.length;
   updateSelectedCount();
+}
+
+function searchFiltersPayload() {
+  const maxPlaceRating = els.maxPlaceRating.value.trim();
+  return {
+    max_review_rating: els.filterNegativeReviews.checked ? 3 : null,
+    max_reviews_per_place: Number(els.maxReviewsPerPlace.value) || 5,
+    max_place_rating: maxPlaceRating ? Number(maxPlaceRating) : null,
+    use_cache: els.useCache.checked,
+  };
 }
 
 function updateSelectedCount() {
@@ -620,7 +904,7 @@ function updateSelectedCount() {
 
 async function runSearch() {
   hideError();
-  setLoading(true, "Buscando y clasificando reseñas… puede tardar un minuto.");
+  startSearchProgress();
 
   try {
     const data = await apiPost("/api/search", {
@@ -629,25 +913,13 @@ async function runSearch() {
       business_type: els.businessType.value,
       max_places: Number(els.maxPlaces.value),
       project_id: els.projectSelect.value,
+      ...searchFiltersPayload(),
     });
-
-    hasSearched = true;
-    leads = data.leads || [];
-    categorySuggestions = data.category_suggestions || [];
-    selectedIds.clear();
-    activeFilter = "all";
-    document.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("active", chip.dataset.filter === "all");
-    });
-    els.summary.textContent = data.summary || "";
-    els.summary.hidden = !data.summary;
-    updateStats(data.places_scanned || 0, data.reviews_analyzed || 0);
-    renderSuggestions();
-    renderResults();
+    applySearchResponse(data);
   } catch (err) {
     showError(err.message || "Ocurrió un error inesperado");
   } finally {
-    setLoading(false);
+    stopSearchProgress();
   }
 }
 
@@ -735,6 +1007,13 @@ function bindEvents() {
 
   els.exportBtn.addEventListener("click", exportSelected);
   els.messagesBtn.addEventListener("click", openBulkMessages);
+  els.saveCustomBtn.addEventListener("click", saveCustomProject);
+  els.deleteCustomBtn.addEventListener("click", deleteCustomProject);
+  els.historyBtn.addEventListener("click", openHistoryDrawer);
+
+  document.querySelectorAll("[data-close-history]").forEach((el) => {
+    el.addEventListener("click", closeHistoryDrawer);
+  });
 
   els.copyMessageBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(currentMessageBody);

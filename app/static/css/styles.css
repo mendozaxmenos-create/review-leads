@@ -45,6 +45,13 @@ header p {
   font-size: 0.9rem;
 }
 
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 380px 1fr;
@@ -188,6 +195,22 @@ input[type="range"] {
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 0.5rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .main {
@@ -502,6 +525,67 @@ input[type="range"] {
   margin-top: 0.75rem;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.status-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.lead-status {
+  width: auto;
+  min-width: 140px;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.bulk-channel {
+  width: auto;
+  min-width: 110px;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.history-panel .history-list {
+  padding: 0.5rem 1rem 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.history-item:hover {
+  border-color: var(--accent);
+}
+
+.history-item span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.history-cache {
+  font-size: 0.75rem !important;
+  color: var(--medium) !important;
 }
 
 .suggestions-box {
