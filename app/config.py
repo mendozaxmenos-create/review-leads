@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,8 +10,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     app_host: str = "0.0.0.0"
-    app_port: int = 8000
-    debug: bool = True
+    app_port: int = Field(default=8000, validation_alias=AliasChoices("PORT", "APP_PORT"))
+    debug: bool = False
 
     database_path: str = "data/review-leads.db"
     cache_ttl_hours: int = 24

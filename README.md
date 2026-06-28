@@ -201,6 +201,25 @@ Estados de lead: `new`, `contacted`, `responded`, `closed`, `discarded`.
 | `GET` | `/api/history/leads` | Listar leads guardados (`?status=contacted`) |
 | `PATCH` | `/api/history/leads/{id}` | Actualizar estado o notas |
 
+## Producción (Render)
+
+El repo incluye `Dockerfile` y `render.yaml` para desplegar en [Render](https://render.com):
+
+1. Conectá el repo `schejtergustavo/review-leads` en Render → **New Blueprint**
+2. Agregá las variables secretas:
+   - `GOOGLE_PLACES_API_KEY`
+   - `OPENAI_API_KEY`
+3. Render monta un disco en `/app/data` para SQLite (caché, historial, servicios custom)
+
+Health check: `GET /health`
+
+Alternativa manual con Docker:
+
+```bash
+docker build -t review-leads .
+docker run -p 8000:8000 --env-file .env -v review-leads-data:/app/data review-leads
+```
+
 ## Retomar el proyecto
 
 ```bash

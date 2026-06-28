@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: review-leads
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_PATH
+        value: /app/data/review-leads.db
+      - key: CACHE_TTL_HOURS
+        value: "24"
+    disk:
+      name: review-leads-data
+      mountPath: /app/data
+      sizeGB: 1
