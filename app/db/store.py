@@ -197,7 +197,7 @@ class Store:
                     now,
                     response.get("project_id"),
                     response.get("project_name"),
-                    request.get("business_type"),
+                    request.get("business_type") or "all",
                     center.get("lat"),
                     center.get("lng"),
                     request.get("radius_km"),
@@ -262,7 +262,9 @@ class Store:
                 "SELECT id, place_id, status, notes FROM saved_leads WHERE place_id = ?",
                 (place_id,),
             ).fetchone()
-        return dict(row)
+        result = dict(row)
+        result["saved_lead_id"] = result["id"]
+        return result
 
     def update_saved_lead(
         self,
@@ -312,12 +314,20 @@ class Store:
         }
 
     def list_saved_leads(self, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        query = "SELECT id, place_id, status, notes, lead_json, updated_at FROM saved_leads"
+        query = """
+            SELECT sl.id, sl.place_id, sl.status, sl.notes, sl.lead_json, sl.updated_at,
+                   sh.project_id, sh.project_name, sh.business_type, sh.created_at AS search_at
+            FROM saved_leads sl
+            LEFT JOIN search_history sh ON sl.search_history_id = sh.id
+        """
         params: list[Any] = []
+        conditions: list[str] = []
         if status:
-            query += " WHERE status = ?"
+            conditions.append("sl.status = ?")
             params.append(status)
-        query += " ORDER BY updated_at DESC LIMIT ?"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY sl.updated_at DESC LIMIT ?"
         params.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
@@ -327,6 +337,64 @@ class Store:
             item["lead"] = json.loads(item.pop("lead_json"))
             results.append(item)
         return results
+
+    def list_saved_leads_admin(
+        self,
+        *,
+        status: str | None = None,
+        project_id: str | None = None,
+        lead_fit: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        query = """
+            SELECT sl.id, sl.place_id, sl.status, sl.notes, sl.lead_json, sl.updated_at,
+                   sh.project_id, sh.project_name, sh.business_type, sh.created_at AS search_at
+            FROM saved_leads sl
+            LEFT JOIN search_history sh ON sl.search_history_id = sh.id
+        """
+        params: list[Any] = []
+        conditions: list[str] = []
+        if status:
+            conditions.append("sl.status = ?")
+            params.append(status)
+        if project_id:
+            conditions.append("sh.project_id = ?")
+            params.append(project_id)
+        if lead_fit:
+            conditions.append("json_extract(sl.lead_json, '$.lead_fit') = ?")
+            params.append(lead_fit)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY sl.status ASC, sl.updated_at DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        results = []
+        for row in rows:
+            item = dict(row)
+            item["lead"] = json.loads(item.pop("lead_json"))
+            results.append(item)
+        return results
+
+    def count_leads_by_status(self) -> dict[str, int]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) AS cnt FROM saved_leads GROUP BY status"
+            ).fetchall()
+        return {row["status"]: row["cnt"] for row in rows}
+
+    def list_admin_project_filters(self) -> list[dict[str, str | None]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT sh.project_id, sh.project_name
+                FROM saved_leads sl
+                INNER JOIN search_history sh ON sl.search_history_id = sh.id
+                WHERE sh.project_id IS NOT NULL OR sh.project_name IS NOT NULL
+                ORDER BY sh.project_name COLLATE NOCASE
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def _row_to_profile(row: sqlite3.Row) -> ServiceProfile:

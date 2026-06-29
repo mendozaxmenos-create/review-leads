@@ -5,11 +5,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
-from app.data.services import get_profile
+from app.data.business_types import all_searchable_types, label_for
+from app.data.lead_filters import is_prospectable_place, is_prospectable_rubro
+from app.data.services import DISCOVERY_INTRO, get_profile
 from app.db.store import get_store
-from app.models.schemas import LeadFit, ReviewLead, ReviewSnippet, SearchRequest, SearchResponse
+from app.models.schemas import LeadFit, ReviewLead, ReviewSnippet, RubroSummary, SearchRequest, SearchResponse
 from app.services.cache import attach_saved_lead_meta, make_search_cache_key
-from app.services.category_suggester import CategorySuggester
 from app.services.classifier import ReviewClassifier
 from app.services.places import PlacesService
 
@@ -30,28 +31,17 @@ class PlaceLeadDraft:
     website: str | None
     google_maps_url: str | None
     rating: float | None
+    business_type: str = "store"
+    business_type_label: str = "Negocio"
     best_fit: LeadFit = LeadFit.LOW
+    recommended_project_id: str | None = None
+    recommended_project_name: str | None = None
+    service_votes: Counter = field(default_factory=Counter)
     theme_counts: Counter = field(default_factory=Counter)
     reasons: list[str] = field(default_factory=list)
     pitches: list[str] = field(default_factory=list)
+    solution_values: list[str] = field(default_factory=list)
     samples: list[ReviewSnippet] = field(default_factory=list)
-
-
-def _resolve_project(request: SearchRequest) -> tuple[str, str | None, str | None]:
-    if request.project_id:
-        profile = get_profile(request.project_id)
-        if not profile:
-            raise HTTPException(
-                status_code=400,
-                detail=f"project_id '{request.project_id}' no existe. Ver GET /api/projects",
-            )
-        criteria = profile.lead_criteria
-        if request.lead_criteria:
-            criteria = f"{criteria}\n\nCriterios adicionales: {request.lead_criteria}"
-        return profile.description, criteria, profile.name
-
-    assert request.project_description
-    return request.project_description, request.lead_criteria, None
 
 
 def _build_place_lead(draft: PlaceLeadDraft) -> ReviewLead:
@@ -59,7 +49,15 @@ def _build_place_lead(draft: PlaceLeadDraft) -> ReviewLead:
     theme_line = ", ".join(f"{theme} ({count})" for theme, count in draft.theme_counts.most_common())
     reason = draft.reasons[0] if len(draft.reasons) == 1 else f"Quejas detectadas: {theme_line}."
     pitch = next((p for p in draft.pitches if p), None)
+    solution_value = next((s for s in draft.solution_values if s), None)
     review_text = " · ".join(sample.text[:180] for sample in draft.samples[:3])
+
+    if draft.service_votes and not draft.recommended_project_id:
+        top_service = draft.service_votes.most_common(1)[0][0]
+        profile = get_profile(top_service)
+        if profile:
+            draft.recommended_project_id = profile.id
+            draft.recommended_project_name = profile.name
 
     return ReviewLead(
         place_name=draft.place_name,
@@ -82,6 +80,11 @@ def _build_place_lead(draft: PlaceLeadDraft) -> ReviewLead:
         author=draft.samples[0].author if draft.samples else None,
         reason=reason,
         suggested_pitch=pitch,
+        solution_value=solution_value,
+        business_type=draft.business_type,
+        business_type_label=draft.business_type_label,
+        recommended_project_id=draft.recommended_project_id,
+        recommended_project_name=draft.recommended_project_name,
     )
 
 
@@ -91,6 +94,26 @@ def _place_passes_rating_filter(place_rating: float | None, max_place_rating: fl
     if place_rating is None:
         return True
     return place_rating <= max_place_rating
+
+
+def _build_rubro_summary(leads: list[ReviewLead]) -> list[RubroSummary]:
+    counts: Counter[str] = Counter()
+    labels: dict[str, str] = {}
+    types: dict[str, str] = {}
+    for lead in leads:
+        label = lead.business_type_label or label_for(lead.business_type or "store")
+        key = lead.business_type or label.lower().replace(" ", "_")
+        counts[key] += 1
+        labels[key] = label
+        types[key] = lead.business_type or key
+    return [
+        RubroSummary(
+            business_type=types[key],
+            business_type_label=labels[key],
+            leads_count=count,
+        )
+        for key, count in counts.most_common()
+    ]
 
 
 def _persist_search_result(
@@ -121,20 +144,37 @@ def _persist_search_result(
     return response
 
 
-async def _run_search(request: SearchRequest, project_name: str | None) -> SearchResponse:
-    project_description, lead_criteria, resolved_name = _resolve_project(request)
-    project_name = project_name or resolved_name
+def _apply_service_to_draft(
+    draft: PlaceLeadDraft,
+    *,
+    fit: LeadFit,
+    service_id: str | None,
+    rubro_label: str,
+) -> None:
+    if rubro_label:
+        draft.business_type_label = rubro_label
+    if service_id and fit in (LeadFit.HIGH, LeadFit.MEDIUM, LeadFit.LOW):
+        draft.service_votes[service_id] += 1
+        profile = get_profile(service_id)
+        if profile and (
+            draft.recommended_project_id is None
+            or FIT_PRIORITY[fit] < FIT_PRIORITY[draft.best_fit]
+        ):
+            draft.recommended_project_id = profile.id
+            draft.recommended_project_name = profile.name
 
+
+async def _run_search(request: SearchRequest) -> SearchResponse:
     places_service = PlacesService()
     classifier = ReviewClassifier()
-    suggester = CategorySuggester()
 
-    places = await places_service.search_nearby(
+    types_filter = [request.business_type] if request.business_type else None
+    discovery_items = await places_service.search_discovery(
         lat=request.center.lat,
         lng=request.center.lng,
         radius_km=request.radius_km,
-        business_type=request.business_type,
         max_results=request.max_places,
+        business_types=types_filter,
     )
 
     place_drafts: dict[str, PlaceLeadDraft] = {}
@@ -142,7 +182,9 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
     reviews_classified = 0
     reviews_skipped = 0
 
-    for place_summary in places:
+    for item in discovery_items:
+        place_summary = item["place"]
+        search_business_type = item["business_type"]
         place_id = place_summary.get("id", "")
         if not place_id:
             continue
@@ -156,6 +198,21 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
         address = details.get("formattedAddress")
         place_rating = details.get("rating")
         lat, lng = PlacesService.extract_location(details)
+        inferred_type = PlacesService.infer_business_type(details, search_business_type)
+        place_types = details.get("types") or []
+        primary_type = details.get("primaryType")
+
+        if not is_prospectable_place(
+            place_name,
+            primary_type=primary_type,
+            types=place_types,
+        ):
+            skipped_reviews = PlacesService.extract_reviews(details)
+            reviews_fetched += len(skipped_reviews)
+            reviews_skipped += len(skipped_reviews)
+            continue
+
+        type_label = label_for(inferred_type)
 
         if not _place_passes_rating_filter(place_rating, request.max_place_rating):
             skipped_reviews = PlacesService.extract_reviews(details)
@@ -176,14 +233,30 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
 
         for review in reviews_to_classify:
             reviews_classified += 1
-            fit, theme, reason, pitch = await classifier.classify_review(
-                project_description=project_description,
-                lead_criteria=lead_criteria,
+            (
+                fit,
+                theme,
+                reason,
+                pitch,
+                service_id,
+                rubro,
+                solution_value,
+                review_text_es,
+                prospectable,
+            ) = await classifier.classify_review_discovery(
                 place_name=place_name,
                 place_address=address,
+                business_type_label=type_label,
                 review_text=review["text"],
                 review_rating=review.get("rating"),
+                google_primary_type=primary_type,
             )
+
+            if not prospectable or not is_prospectable_rubro(rubro):
+                continue
+
+            if request.project_id and service_id != request.project_id:
+                continue
 
             if fit not in (LeadFit.HIGH, LeadFit.MEDIUM, LeadFit.LOW):
                 continue
@@ -200,19 +273,24 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
                     website=contacts["website"],
                     google_maps_url=contacts["google_maps_url"],
                     rating=place_rating,
+                    business_type=inferred_type,
+                    business_type_label=rubro if is_prospectable_rubro(rubro) else type_label,
                     best_fit=fit,
                 )
 
             draft = place_drafts[place_id]
             if FIT_PRIORITY[fit] < FIT_PRIORITY[draft.best_fit]:
                 draft.best_fit = fit
+            _apply_service_to_draft(draft, fit=fit, service_id=service_id, rubro_label=rubro)
             draft.theme_counts[theme] += 1
             draft.reasons.append(reason)
             if pitch:
                 draft.pitches.append(pitch)
+            if solution_value:
+                draft.solution_values.append(solution_value)
             draft.samples.append(
                 ReviewSnippet(
-                    text=review["text"],
+                    text=review_text_es,
                     rating=review.get("rating"),
                     author=review.get("author"),
                     theme=theme,
@@ -220,34 +298,29 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
             )
 
     leads = [_build_place_lead(draft) for draft in place_drafts.values()]
-    leads.sort(key=lambda item: (FIT_PRIORITY[item.lead_fit], -item.reviews_count))
-
-    relevant_leads = sum(1 for lead in leads if lead.lead_fit in (LeadFit.HIGH, LeadFit.MEDIUM))
-
-    summary = await classifier.summarize_leads(
-        project_description=project_description,
-        leads=leads,
-        places_scanned=len(places),
-        reviews_analyzed=reviews_classified,
+    leads.sort(
+        key=lambda item: (
+            FIT_PRIORITY[item.lead_fit],
+            -item.reviews_count,
+            item.business_type_label or "",
+        )
     )
 
-    category_suggestions = await suggester.suggest(
-        center=request.center,
-        radius_km=request.radius_km,
-        current_business_type=request.business_type,
-        project_id=request.project_id,
-        project_description=project_description,
-        places_found=len(places),
-        relevant_leads=relevant_leads,
+    summary = await classifier.summarize_leads(
+        project_description=DISCOVERY_INTRO,
+        leads=leads,
+        places_scanned=len(discovery_items),
+        reviews_analyzed=reviews_classified,
     )
 
     return SearchResponse(
         center=request.center,
         radius_km=request.radius_km,
-        business_type=request.business_type,
-        project_id=request.project_id,
-        project_name=project_name,
-        places_scanned=len(places),
+        business_type=request.business_type or "all",
+        project_id=None,
+        project_name="Detección automática",
+        discovery_mode=True,
+        places_scanned=len(discovery_items),
         reviews_fetched=reviews_fetched,
         reviews_classified=reviews_classified,
         reviews_skipped=reviews_skipped,
@@ -255,7 +328,8 @@ async def _run_search(request: SearchRequest, project_name: str | None) -> Searc
         from_cache=False,
         leads=leads,
         summary=summary,
-        category_suggestions=category_suggestions,
+        rubro_summary=_build_rubro_summary(leads),
+        category_suggestions=[],
     )
 
 
@@ -279,14 +353,17 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
     if request.use_cache:
         cached = store.get_search_cache(cache_key)
         if cached:
-            attach_saved_lead_meta(cached, store.get_saved_leads_by_places(
-                [lead["place_id"] for lead in cached.get("leads", [])]
-            ))
+            attach_saved_lead_meta(
+                cached,
+                store.get_saved_leads_by_places(
+                    [lead["place_id"] for lead in cached.get("leads", [])]
+                ),
+            )
             response = SearchResponse.model_validate({**cached, "from_cache": True})
             return _persist_search_result(request, response, from_cache=True)
 
     try:
-        response = await _run_search(request, project_name=None)
+        response = await _run_search(request)
     except HTTPException:
         raise
     except Exception as exc:

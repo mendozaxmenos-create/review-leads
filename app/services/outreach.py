@@ -3,7 +3,8 @@ from urllib.parse import quote
 
 from openai import AsyncOpenAI
 
-from app.config import settings
+from app.config import settings, outreach_sender_signature
+from app.data.outreach_guidelines import CONVERSATION_RULES, FIRST_CONTACT_RULES, GOOGLE_REVIEWS_SOURCE_RULES
 from app.data.services import get_profile
 from app.models.schemas import ChatMessage, ConversationResponse, LeadInput, OutreachMessage
 
@@ -32,30 +33,34 @@ class OutreachService:
     ) -> OutreachMessage:
         project_name, description = self._project_context(project_id, project_description)
         themes_line = ", ".join(lead.themes) if lead.themes else "Sin temas específicos"
+        sender = outreach_sender_signature()
 
         prompt = f"""Generá un mensaje de primer contacto para vender: {project_name}
 Descripción del servicio: {description}
 
+Quién envía el mensaje (VOS / el vendedor): {sender}
+Negocio al que le escribís (el cliente / destinatario): {lead.place_name}
 Canal: {channel}
-Negocio: {lead.place_name}
-Dirección: {lead.address or "N/A"}
-Teléfono en Google: {lead.phone or "no disponible"}
-Email en Google: {lead.email or "no disponible"}
-Web: {lead.website or "no disponible"}
+Dirección del negocio: {lead.address or "N/A"}
+Teléfono del negocio en Google: {lead.phone or "no disponible"}
+Email del negocio en Google: {lead.email or "no disponible"}
+Web del negocio: {lead.website or "no disponible"}
 
-Temas de queja detectados ({lead.reviews_count} reseñas): {themes_line}
+Temas de queja en reseñas de Google ({lead.reviews_count} reseñas analizadas): {themes_line}
 
-Reseñas relevantes:
+Fragmentos de reseñas de clientes en Google:
 "{lead.review_text}"
 
-Por qué es lead: {lead.reason}
+Por qué es lead (según reseñas de Google): {lead.reason}
 
 Reglas:
 - Español rioplatense profesional pero cercano
-- Mencioná los dolores detectados (temas) sin citar reseñas textualmente de forma invasiva
-- Propuesta de valor clara en 2-3 oraciones
-- CTA concreto (llamada, demo, reunión de 15 min)
-- Máximo 600 caracteres si es whatsapp
+- El mensaje lo escribe {sender} contactando A {lead.place_name}
+- NUNCA digas "soy de {lead.place_name}" ni te identifiques como el negocio contactado
+- Empezá presentándote, ej: "Hola, soy {sender}."
+{GOOGLE_REVIEWS_SOURCE_RULES}
+{FIRST_CONTACT_RULES}
+- Máximo 700 caracteres si es whatsapp
 - No inventes datos de contacto ni links
 
 JSON:
@@ -73,7 +78,12 @@ JSON:
             messages=[
                 {
                     "role": "system",
-                    "content": "Sos copywriter de ventas B2B. Respondé solo JSON válido.",
+                    "content": (
+                        "Sos copywriter de ventas B2B por WhatsApp. "
+                        "Los dolores mencionados deben atribuirse a reseñas de clientes en Google. "
+                        "El primer contacto NUNCA propone reunión: primero interés y opciones. "
+                        "Respondé solo JSON válido."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -118,24 +128,29 @@ JSON:
     ) -> ConversationResponse:
         project_name, description = self._project_context(project_id, project_description)
         themes_line = ", ".join(lead.themes) if lead.themes else "Sin temas específicos"
+        sender = outreach_sender_signature()
 
-        system = f"""Sos un bot de ventas que contacta a {lead.place_name} para ofrecer {project_name}.
-Descripción: {description}
+        system = f"""Sos {sender}, un vendedor que contacta por WhatsApp al negocio "{lead.place_name}" para ofrecer {project_name}.
+Descripción del servicio: {description}
 
-Contexto del lead:
-- Temas de queja: {themes_line}
+IMPORTANTE: Vos sos {sender}. El cliente es {lead.place_name}. Nunca te identifiques como {lead.place_name}.
+
+Contexto del lead (reseñas públicas de clientes en Google Maps):
+- Temas de queja en Google: {themes_line}
 - Reseñas: "{lead.review_text}"
 - Por qué es lead: {lead.reason}
 - Relevancia: {lead.lead_fit}
 - Teléfono Google: {lead.phone or "N/A"}
 
-Objetivo: responder, presentar valor, manejar objeciones y avanzar al cierre (reunión/demo/presupuesto).
-Etapas: intro → discovery → offer → objection → close
+Objetivo: generar interés, presentar opciones concretas, responder dudas y avanzar sin presionar.
+{GOOGLE_REVIEWS_SOURCE_RULES}
+{CONVERSATION_RULES}
+Etapas: intro → interest → options → objection → close (reunión solo en close y si hubo interés previo)
 
 Respondé JSON:
 {{
   "reply": "tu mensaje al cliente",
-  "stage": "intro|discovery|offer|objection|close",
+  "stage": "intro|interest|options|objection|close",
   "next_action": "qué debería hacer el vendedor después",
   "close_probability": 0-100
 }}

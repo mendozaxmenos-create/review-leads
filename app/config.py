@@ -15,6 +15,18 @@ class Settings(BaseSettings):
 
     database_path: str = "data/review-leads.db"
     cache_ttl_hours: int = 24
+    nominatim_contact_email: str = ""
+
+    outreach_sender_name: str = "Gustavo"
+    outreach_sender_company: str = "SofIA"
+
+
+def outreach_sender_signature() -> str:
+    name = settings.outreach_sender_name.strip()
+    company = settings.outreach_sender_company.strip()
+    if name and company:
+        return f"{name} de {company}"
+    return name or company or "nuestro estudio"
 
 
 settings = Settings()

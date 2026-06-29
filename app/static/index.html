@@ -19,7 +19,10 @@
           <h1>Review Leads</h1>
           <p>Encontrá clientes potenciales según reseñas de Google en tu zona</p>
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" id="history-btn">Historial</button>
+        <div class="header-actions">
+          <a href="/admin" class="btn btn-secondary btn-sm">Panel CRM</a>
+          <button type="button" class="btn btn-secondary btn-sm" id="history-btn">Historial</button>
+        </div>
       </div>
     </header>
 
@@ -27,17 +30,26 @@
       <aside class="sidebar">
         <section class="panel">
           <h2>Zona de búsqueda</h2>
-          <label for="address-search">Buscar dirección o barrio</label>
-          <div class="row-2">
-            <input
-              type="text"
-              id="address-search"
-              placeholder="Ej: Palermo, Buenos Aires"
-            />
-            <button type="button" class="btn btn-secondary btn-sm" id="geocode-btn">
-              Ir
-            </button>
+          <label for="address-search">Buscar ciudad, departamento o dirección</label>
+          <div class="geocode-wrap">
+            <div class="row-2">
+              <input
+                type="text"
+                id="address-search"
+                placeholder="Ej: Mendoza, Godoy Cruz, Palermo…"
+                autocomplete="off"
+              />
+              <button type="button" class="btn btn-secondary btn-sm" id="geocode-btn">
+                Ir
+              </button>
+            </div>
+            <ul id="geocode-suggestions" class="geocode-suggestions" hidden></ul>
           </div>
+
+          <label for="location-preset">Ubicación rápida (Argentina)</label>
+          <select id="location-preset">
+            <option value="">— Elegir provincia o zona —</option>
+          </select>
           <div class="map-wrap">
             <div id="map"></div>
           </div>
@@ -49,16 +61,16 @@
         </section>
 
         <section class="panel">
-          <h2>Qué ofrecés</h2>
-          <label for="project-select">Servicio</label>
-          <select id="project-select"></select>
-          <p class="service-desc" id="service-desc"></p>
+          <h2>Motor de prospección</h2>
+          <p class="discovery-intro" id="discovery-intro">
+            Buscamos en <strong>todos los rubros</strong> de la zona y la IA detecta qué solución
+            con Cursor encaja en cada negocio.
+          </p>
+          <ul class="service-catalog" id="service-catalog"></ul>
 
-          <label for="business-type">Tipo de negocio a buscar</label>
-          <select id="business-type"></select>
-
-          <label for="max-places">Cantidad máxima de lugares</label>
-          <input type="number" id="max-places" min="1" max="60" value="15" />
+          <label for="max-places">Cantidad máxima de lugares a escanear</label>
+          <input type="number" id="max-places" min="8" max="60" value="24" />
+          <p class="map-hint">Más lugares = más leads pero más tiempo y costo de APIs.</p>
         </section>
 
         <section class="panel">
@@ -85,7 +97,7 @@
           </label>
         </section>
 
-        <section class="panel" id="custom-project-panel">
+        <section class="panel" id="custom-project-panel" hidden>
           <h2>Servicio propio</h2>
           <label for="custom-name">Nombre</label>
           <input type="text" id="custom-name" placeholder="Ej: Automatización WhatsApp" />
@@ -102,7 +114,7 @@
         </section>
 
         <button type="button" class="btn btn-primary" id="search-btn">
-          Buscar leads
+          Generar leads
         </button>
       </aside>
 
@@ -115,12 +127,13 @@
               <span class="stat">Leads: <strong id="stat-leads">0</strong></span>
               <span class="stat">Seleccionados: <strong id="stat-selected">0</strong></span>
             </div>
-            <div class="filter-chips">
+            <div class="filter-chips" id="fit-filters">
               <button type="button" class="chip active" data-filter="all">Todos</button>
               <button type="button" class="chip" data-filter="high">High</button>
               <button type="button" class="chip" data-filter="medium">Medium</button>
               <button type="button" class="chip" data-filter="low">Low</button>
             </div>
+            <div class="filter-chips rubro-filters" id="rubro-filters" hidden></div>
           </div>
           <div class="actions-row">
             <button type="button" class="btn btn-secondary btn-sm" id="select-all">

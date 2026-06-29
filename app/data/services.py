@@ -95,6 +95,11 @@ SERVICE_PROFILES: list[ServiceProfile] = [
 
 _PROFILES_BY_ID = {profile.id: profile for profile in SERVICE_PROFILES}
 
+DISCOVERY_INTRO = (
+    "Estudio de desarrollo con Cursor (IA asistida): software a medida, automatizaciones, "
+    "bots de WhatsApp, CRMs, apps web/móvil, integraciones e IA aplicada a cualquier proceso digital."
+)
+
 
 def get_profile(profile_id: str) -> ServiceProfile | None:
     profile = _PROFILES_BY_ID.get(profile_id)
@@ -102,8 +107,26 @@ def get_profile(profile_id: str) -> ServiceProfile | None:
         return profile
     from app.db.store import get_store
 
-    return get_store().get_custom_profile(project_id)
+    return get_store().get_custom_profile(profile_id)
 
 
 def list_profiles() -> list[ServiceProfile]:
     return list(SERVICE_PROFILES)
+
+
+def list_all_profiles() -> list[ServiceProfile]:
+    from app.db.store import get_store
+
+    return list(SERVICE_PROFILES) + get_store().list_custom_projects()
+
+
+def catalog_for_discovery() -> list[dict[str, str]]:
+    return [
+        {
+            "id": profile.id,
+            "name": profile.name,
+            "description": profile.description,
+            "lead_criteria": profile.lead_criteria,
+        }
+        for profile in list_all_profiles()
+    ]

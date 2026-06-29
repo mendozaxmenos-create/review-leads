@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.db.store import get_store
-from app.routers import history, outreach, projects, search
+from app.routers import admin, geocode, history, outreach, projects, search
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -39,11 +39,18 @@ app.include_router(projects.router)
 app.include_router(search.router)
 app.include_router(outreach.router)
 app.include_router(history.router)
+app.include_router(admin.router)
+app.include_router(geocode.router)
 
 
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/admin")
+async def admin_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "admin.html")
 
 
 @app.get("/health")

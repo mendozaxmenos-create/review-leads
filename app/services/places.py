@@ -1,14 +1,18 @@
+import asyncio
 import json
 from typing import Any
 
 import httpx
 
 from app.config import settings
+from app.data.business_types import all_searchable_types
 
 PLACES_BASE = "https://places.googleapis.com/v1"
-FIELD_MASK_SEARCH = "places.id,places.displayName,places.formattedAddress,places.rating"
+FIELD_MASK_SEARCH = (
+    "places.id,places.displayName,places.formattedAddress,places.rating,places.primaryType"
+)
 FIELD_MASK_DETAILS = (
-    "id,displayName,formattedAddress,rating,location,"
+    "id,displayName,formattedAddress,rating,location,primaryType,types,"
     "nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,"
     "reviews.text,reviews.rating,reviews.authorAttribution.displayName"
 )
@@ -56,6 +60,58 @@ class PlacesService:
             data = response.json()
 
         return data.get("places", [])
+
+    async def search_discovery(
+        self,
+        lat: float,
+        lng: float,
+        radius_km: float,
+        max_results: int,
+        business_types: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        types = business_types or all_searchable_types()
+        per_type = max(2, min(4, max_results // max(len(types), 1) + 1))
+        semaphore = asyncio.Semaphore(5)
+
+        async def fetch_type(business_type: str) -> list[dict[str, Any]]:
+            async with semaphore:
+                try:
+                    places = await self.search_nearby(
+                        lat=lat,
+                        lng=lng,
+                        radius_km=radius_km,
+                        business_type=business_type,
+                        max_results=per_type,
+                    )
+                except Exception:
+                    return []
+                return [
+                    {
+                        "place": place,
+                        "business_type": business_type,
+                    }
+                    for place in places
+                ]
+
+        batches = await asyncio.gather(*(fetch_type(bt) for bt in types))
+        seen: dict[str, dict[str, Any]] = {}
+        for batch in batches:
+            for item in batch:
+                place_id = item["place"].get("id", "")
+                if place_id and place_id not in seen:
+                    seen[place_id] = item
+
+        return list(seen.values())[:max_results]
+
+    @staticmethod
+    def infer_business_type(place: dict[str, Any], fallback: str | None = None) -> str:
+        primary = place.get("primaryType")
+        if primary:
+            return primary
+        types = place.get("types") or []
+        if types:
+            return types[0]
+        return fallback or "store"
 
     async def get_place_details(self, place_id: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -118,6 +174,22 @@ class PlacesService:
         return result
 
     @staticmethod
+    def _spanish_score(text: str) -> int:
+        text_lower = text.lower()
+        spanish = (
+            " que ", " con ", " para ", " muy ", " mal ", " bien ", " no ", " el ", " la ",
+            " los ", " las ", " es ", " está ", " esta ", " horrible ", " pésimo ", " pesimo ",
+            " atención ", " atencion ", " nunca ", " siempre ", " lugar ", " servicio ",
+        )
+        english = (
+            " the ", " and ", " very ", " bad ", " good ", " not ", " can't ", " don't ",
+            " it's ", " they ", " worst ", " never ", " always ", " place ", " service ",
+        )
+        score = sum(1 for marker in spanish if marker in f" {text_lower} ")
+        score -= sum(1 for marker in english if marker in f" {text_lower} ")
+        return score
+
+    @staticmethod
     def select_reviews_for_analysis(
         reviews: list[dict[str, Any]],
         *,
@@ -137,11 +209,10 @@ class PlacesService:
                     skipped += 1
             candidates = filtered
 
-        def sort_key(review: dict[str, Any]) -> tuple[bool, int]:
+        def sort_key(review: dict[str, Any]) -> tuple[int, int]:
             rating = review.get("rating")
-            if rating is None:
-                return (True, 99)
-            return (False, rating)
+            rating_val = rating if rating is not None else 99
+            return (rating_val, -PlacesService._spanish_score(review.get("text", "")))
 
         candidates.sort(key=sort_key)
 

@@ -18,11 +18,11 @@ const BUSINESS_TYPES = [
 ];
 
 const LEAD_STATUSES = [
-  { value: "new", label: "Nuevo" },
-  { value: "contacted", label: "Contactado" },
-  { value: "responded", label: "Respondió" },
-  { value: "closed", label: "Cerrado" },
-  { value: "discarded", label: "Descartado" },
+  { code: 0, value: "new", label: "0 — Pendiente de contacto" },
+  { code: 1, value: "contacted", label: "1 — Contacto realizado" },
+  { code: 2, value: "responded", label: "2 — Respondió" },
+  { code: 3, value: "closed", label: "3 — Cerrado" },
+  { code: 4, value: "discarded", label: "4 — Descartado" },
 ];
 
 let map;
@@ -32,20 +32,25 @@ let leadLayer;
 let center = { ...DEFAULT_CENTER };
 let projects = [];
 let leads = [];
-let categorySuggestions = [];
+let rubroSummary = [];
 let selectedIds = new Set();
 let activeFilter = "all";
+let activeRubroFilter = "all";
 let hasSearched = false;
 let activeLeadForBot = null;
 let botMessages = [];
 let currentMessageBody = "";
+let activeModalLeadId = null;
+const leadMessages = new Map();
 let progressTimer = null;
 let lastSearchHistoryId = null;
+let locationPresets = [];
+let geocodeDebounce = null;
 
 const els = {
-  projectSelect: document.getElementById("project-select"),
-  serviceDesc: document.getElementById("service-desc"),
-  businessType: document.getElementById("business-type"),
+  serviceCatalog: document.getElementById("service-catalog"),
+  rubroFilters: document.getElementById("rubro-filters"),
+  fitFilters: document.getElementById("fit-filters"),
   radius: document.getElementById("radius"),
   radiusValue: document.getElementById("radius-value"),
   maxPlaces: document.getElementById("max-places"),
@@ -64,6 +69,8 @@ const els = {
   historyList: document.getElementById("history-list"),
   bulkChannel: document.getElementById("bulk-channel"),
   addressSearch: document.getElementById("address-search"),
+  geocodeSuggestions: document.getElementById("geocode-suggestions"),
+  locationPreset: document.getElementById("location-preset"),
   searchBtn: document.getElementById("search-btn"),
   results: document.getElementById("results"),
   summary: document.getElementById("summary"),
@@ -113,7 +120,83 @@ function leadInputFrom(lead) {
     lead_fit: lead.lead_fit,
     reason: lead.reason,
     suggested_pitch: lead.suggested_pitch,
+    recommended_project_id: lead.recommended_project_id,
+    business_type_label: lead.business_type_label,
   };
+}
+
+function projectPayload(lead) {
+  return { project_id: lead?.recommended_project_id || "cursor-dev" };
+}
+
+function cacheLeadMessage(id, data) {
+  if (!data?.body) return;
+  leadMessages.set(id, {
+    body: data.body,
+    whatsapp_link: data.whatsapp_link || null,
+  });
+}
+
+function getLeadMessageBody(id) {
+  if (activeModalLeadId === id && currentMessageBody) return currentMessageBody;
+  const cached = leadMessages.get(id);
+  if (cached?.body) return cached.body;
+  const lead = getLeadById(id)?.lead;
+  return lead?.suggested_pitch || "";
+}
+
+function openWhatsAppWeb(id, messageBody) {
+  const found = getLeadById(id);
+  if (!found?.lead.phone) return false;
+  const body = messageBody || getLeadMessageBody(id);
+  const cached = leadMessages.get(id);
+  const url =
+    body && cached?.whatsapp_link && cached.body === body
+      ? cached.whatsapp_link
+      : whatsappHref(found.lead.phone, body);
+  if (!url) return false;
+  window.open(url, "_blank", "noopener");
+  return true;
+}
+
+async function ensureLeadWhatsAppMessage(id) {
+  const existing = getLeadMessageBody(id);
+  if (existing) return existing;
+
+  const found = getLeadById(id);
+  if (!found?.lead.phone) throw new Error("Este negocio no tiene teléfono en Google.");
+
+  const data = await apiPost("/api/outreach/message", {
+    lead: leadInputFrom(found.lead),
+    ...projectPayload(found.lead),
+    channel: "whatsapp",
+  });
+  cacheLeadMessage(id, data);
+  return data.body;
+}
+
+async function openWhatsAppForLead(id) {
+  hideError();
+  const found = getLeadById(id);
+  if (!found?.lead.phone) {
+    showError("Este negocio no tiene teléfono en Google.");
+    return;
+  }
+
+  let body = getLeadMessageBody(id);
+  if (!body) {
+    setLoading(true, "Generando mensaje de WhatsApp…");
+    try {
+      body = await ensureLeadWhatsAppMessage(id);
+    } catch (err) {
+      showError(err.message);
+      return;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  openWhatsAppWeb(id, body);
 }
 
 function whatsappHref(phone, message = "") {
@@ -122,10 +205,6 @@ function whatsappHref(phone, message = "") {
   if (digits.length < 8) return null;
   const text = message ? `?text=${encodeURIComponent(message.slice(0, 500))}` : "";
   return `https://wa.me/${digits}${text}`;
-}
-
-function projectPayload() {
-  return { project_id: els.projectSelect.value };
 }
 
 function showError(message) {
@@ -143,9 +222,18 @@ function setLoading(visible, text) {
   if (text) els.loadingText.textContent = text;
 }
 
+async function parseApiResponse(res) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(text.slice(0, 120) || `Error ${res.status}`);
+  }
+}
+
 async function apiGet(url) {
   const res = await fetch(url);
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
   return data;
 }
@@ -156,7 +244,7 @@ async function apiPut(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
   return data;
 }
@@ -167,7 +255,7 @@ async function apiPatch(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
   return data;
 }
@@ -186,7 +274,7 @@ async function apiPost(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+  const data = await parseApiResponse(res);
   if (!res.ok) {
     const detail = Array.isArray(data.detail)
       ? data.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
@@ -237,21 +325,91 @@ function updateCircle() {
   }
 }
 
-async function geocodeAddress(query) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  const data = await res.json();
-  if (!data.length) throw new Error("No encontramos esa dirección. Probá con ciudad + barrio.");
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+function applyMapLocation(pos, zoom = 13) {
+  center = { lat: pos.lat, lng: pos.lng };
+  marker.setLatLng([pos.lat, pos.lng]);
+  map.setView([pos.lat, pos.lng], zoom);
+  updateCircle();
 }
 
-async function loadProjects() {
-  projects = await apiGet("/api/projects");
-  els.projectSelect.innerHTML = projects
-    .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}${p.is_custom ? " (propio)" : ""}</option>`)
+function hideGeocodeSuggestions() {
+  els.geocodeSuggestions.hidden = true;
+  els.geocodeSuggestions.innerHTML = "";
+}
+
+function showGeocodeSuggestions(items) {
+  if (!items.length) {
+    hideGeocodeSuggestions();
+    return;
+  }
+  els.geocodeSuggestions.innerHTML = items
+    .map(
+      (item, index) => `
+    <li>
+      <button type="button" class="geocode-suggestion" data-index="${index}">
+        <strong>${escapeHtml(item.label.split(",")[0])}</strong>
+        <span>${escapeHtml(item.label)}</span>
+        <em>${escapeHtml(item.kind)} · ${item.source === "preset" ? "zona conocida" : "OpenStreetMap"}</em>
+      </button>
+    </li>`
+    )
     .join("");
-  els.businessType.innerHTML = BUSINESS_TYPES.map((t) => `<option value="${t.value}">${t.label}</option>`).join("");
-  onProjectChange();
+
+  els.geocodeSuggestions.hidden = false;
+  els.geocodeSuggestions.querySelectorAll(".geocode-suggestion").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = items[Number(btn.dataset.index)];
+      applyGeocodeResult(item);
+      hideGeocodeSuggestions();
+    });
+  });
+}
+
+function applyGeocodeResult(item) {
+  applyMapLocation(item, item.zoom || 13);
+  els.addressSearch.value = item.label.split(",")[0];
+  els.locationPreset.value = "";
+}
+
+async function geocodeAddress(query, { autoPickSingle = true } = {}) {
+  const items = await apiGet(`/api/geocode/search?q=${encodeURIComponent(query)}&limit=8`);
+  if (!items.length) throw new Error("No encontramos esa zona en Argentina.");
+  if (items.length === 1 && autoPickSingle) {
+    applyGeocodeResult(items[0]);
+    hideGeocodeSuggestions();
+    return items[0];
+  }
+  showGeocodeSuggestions(items);
+  return items;
+}
+
+async function loadLocationPresets() {
+  locationPresets = await apiGet("/api/geocode/presets");
+  const groups = [
+    { key: "argentina", label: "Provincias y ciudades" },
+    { key: "mendoza", label: "Departamentos de Mendoza" },
+  ];
+  els.locationPreset.innerHTML =
+    '<option value="">— Elegir provincia o zona —</option>' +
+    groups
+      .map((group) => {
+        const options = locationPresets
+          .filter((p) => p.group === group.key)
+          .map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`)
+          .join("");
+        return options ? `<optgroup label="${group.label}">${options}</optgroup>` : "";
+      })
+      .join("");
+}
+
+async function loadServiceCatalog() {
+  projects = await apiGet("/api/projects");
+  els.serviceCatalog.innerHTML = projects
+    .map(
+      (p) =>
+        `<li><strong>${escapeHtml(p.name)}</strong><span>${escapeHtml(p.description.slice(0, 90))}${p.description.length > 90 ? "…" : ""}</span></li>`
+    )
+    .join("");
 }
 
 function fillCustomForm(project) {
@@ -268,19 +426,61 @@ function fillCustomForm(project) {
   els.customTypes.value = (project.suggested_business_types || []).join(", ");
 }
 
-function onProjectChange() {
-  const project = projects.find((p) => p.id === els.projectSelect.value);
-  if (!project) return;
-  els.serviceDesc.textContent = project.description;
-  els.deleteCustomBtn.hidden = !project.is_custom;
-  if (project.is_custom) fillCustomForm(project);
-  else fillCustomForm(null);
-  if (project.suggested_business_types?.length) {
-    const suggested = project.suggested_business_types[0];
-    if ([...els.businessType.options].some((o) => o.value === suggested)) {
-      els.businessType.value = suggested;
-    }
+function renderRubroFilters(summary = []) {
+  rubroSummary = summary;
+  if (!summary.length) {
+    els.rubroFilters.hidden = true;
+    els.rubroFilters.innerHTML = "";
+    return;
   }
+  els.rubroFilters.hidden = false;
+  els.rubroFilters.innerHTML = [
+    `<button type="button" class="chip rubro-chip active" data-rubro="all">Todos los rubros</button>`,
+    ...summary.map(
+      (r) =>
+        `<button type="button" class="chip rubro-chip" data-rubro="${escapeHtml(r.business_type)}">${escapeHtml(r.business_type_label)} (${r.leads_count})</button>`
+    ),
+    ].join("");
+
+  els.rubroFilters.querySelectorAll(".rubro-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      activeRubroFilter = chip.dataset.rubro;
+      els.rubroFilters.querySelectorAll(".rubro-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      renderResults();
+    });
+  });
+}
+
+function renderRubroInsights() {
+  if (!rubroSummary.length) {
+    els.suggestions.hidden = true;
+    return;
+  }
+  els.suggestions.hidden = false;
+  els.suggestions.innerHTML = `
+    <h3>Rubros con más oportunidades</h3>
+    <div class="rubro-insights">
+      ${rubroSummary
+        .map(
+          (r) => `
+        <button type="button" class="insight-card" data-rubro="${escapeHtml(r.business_type)}">
+          <strong>${escapeHtml(r.business_type_label)}</strong>
+          <span>${r.leads_count} lead${r.leads_count === 1 ? "" : "s"}</span>
+        </button>`
+        )
+        .join("")}
+    </div>`;
+
+  els.suggestions.querySelectorAll("[data-rubro]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeRubroFilter = btn.dataset.rubro;
+      els.rubroFilters.querySelectorAll(".rubro-chip").forEach((chip) => {
+        chip.classList.toggle("active", chip.dataset.rubro === activeRubroFilter);
+      });
+      renderResults();
+    });
+  });
 }
 
 async function saveCustomProject() {
@@ -298,95 +498,29 @@ async function saveCustomProject() {
     return;
   }
   hideError();
-  const current = projects.find((p) => p.id === els.projectSelect.value);
   try {
-    if (current?.is_custom) {
-      await apiPut(`/api/projects/custom/${current.id}`, body);
-    } else {
-      const created = await apiPost("/api/projects/custom", body);
-      await loadProjects();
-      els.projectSelect.value = created.id;
-      onProjectChange();
-      return;
-    }
-    await loadProjects();
-    onProjectChange();
-  } catch (err) {
-    showError(err.message);
-  }
-}
-
-async function deleteCustomProject() {
-  const current = projects.find((p) => p.id === els.projectSelect.value);
-  if (!current?.is_custom) return;
-  if (!confirm(`¿Eliminar el servicio "${current.name}"?`)) return;
-  try {
-    await apiDelete(`/api/projects/custom/${current.id}`);
-    await loadProjects();
+    await apiPost("/api/projects/custom", body);
+    await loadServiceCatalog();
     fillCustomForm(null);
   } catch (err) {
     showError(err.message);
   }
 }
 
-function applySuggestion(suggestion) {
-  els.businessType.value = suggestion.business_type;
-  if (suggestion.project_id && [...els.projectSelect.options].some((o) => o.value === suggestion.project_id)) {
-    els.projectSelect.value = suggestion.project_id;
-    onProjectChange();
-  }
-  runSearch();
-}
-
-function renderSuggestions() {
-  if (!categorySuggestions.length) {
-    els.suggestions.hidden = true;
-    els.suggestions.innerHTML = "";
-    return;
-  }
-
-  els.suggestions.hidden = false;
-  els.suggestions.innerHTML = `
-    <h3>💡 Categorías sugeridas para tu zona</h3>
-    ${categorySuggestions
-      .map(
-        (s) => `
-      <div class="suggestion-item">
-        <div>
-          <strong>${escapeHtml(s.business_type_label)}</strong>
-          <span class="suggestion-meta"> · ${escapeHtml(s.project_name)} · ${s.places_in_area} negocios · score ${Math.round(s.score * 100)}%</span>
-          <p>${escapeHtml(s.reason)}</p>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" data-suggest-type="${escapeHtml(s.business_type)}" data-suggest-project="${escapeHtml(s.project_id)}">
-          Buscar
-        </button>
-      </div>`
-      )
-      .join("")}`;
-
-  els.suggestions.querySelectorAll("[data-suggest-type]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      applySuggestion({
-        business_type: btn.dataset.suggestType,
-        project_id: btn.dataset.suggestProject,
-      });
-    });
+function filteredLeads() {
+  return leads.filter((lead) => {
+    if (activeFilter !== "all" && lead.lead_fit !== activeFilter) return false;
+    if (activeRubroFilter !== "all" && lead.business_type !== activeRubroFilter) return false;
+    return true;
   });
 }
 
-function filteredLeads() {
-  if (activeFilter === "all") return leads;
-  return leads.filter((l) => l.lead_fit === activeFilter);
-}
-
-function contactsHtml(lead) {
+function contactsHtml(lead, id) {
   const parts = [];
   if (lead.phone) {
-    const wa = whatsappHref(lead.phone);
-    parts.push(`<a class="contact-link" href="tel:${escapeHtml(lead.phone)}">📞 ${escapeHtml(lead.phone)}</a>`);
-    if (wa) {
-      parts.push(`<a class="contact-link" href="${escapeHtml(wa)}" target="_blank" rel="noopener">💬 WhatsApp</a>`);
-    }
+    parts.push(
+      `<a class="contact-link contact-phone" href="#" data-id="${escapeHtml(id)}" data-action="phone-whatsapp" title="Abrir WhatsApp Web con el mensaje">📞 ${escapeHtml(lead.phone)}</a>`
+    );
   }
   if (lead.email) {
     parts.push(`<a class="contact-link" href="mailto:${escapeHtml(lead.email)}">✉️ ${escapeHtml(lead.email)}</a>`);
@@ -462,9 +596,9 @@ async function updateLeadStatus(id, status) {
 
 function startSearchProgress() {
   const steps = [
-    "Buscando negocios en Google…",
-    "Obteniendo reseñas…",
-    "Clasificando quejas con IA…",
+    "Escaneando negocios en todos los rubros…",
+    "Obteniendo reseñas de Google…",
+    "Detectando dolores y servicios con IA…",
     "Agrupando leads por negocio…",
   ];
   let step = 0;
@@ -486,11 +620,12 @@ function stopSearchProgress() {
 function applySearchResponse(data) {
   hasSearched = true;
   leads = data.leads || [];
-  categorySuggestions = data.category_suggestions || [];
+  leadMessages.clear();
   lastSearchHistoryId = data.search_history_id || null;
   selectedIds.clear();
   activeFilter = "all";
-  document.querySelectorAll(".chip").forEach((chip) => {
+  activeRubroFilter = "all";
+  els.fitFilters.querySelectorAll(".chip").forEach((chip) => {
     chip.classList.toggle("active", chip.dataset.filter === "all");
   });
   let summaryText = data.summary || "";
@@ -502,7 +637,8 @@ function applySearchResponse(data) {
     data.reviews_classified ?? data.reviews_analyzed ?? 0,
     data.reviews_skipped || 0
   );
-  renderSuggestions();
+  renderRubroFilters(data.rubro_summary || []);
+  renderRubroInsights();
   renderResults();
 }
 
@@ -576,78 +712,63 @@ function reviewSamplesHtml(lead) {
     </div>`;
 }
 
-function renderResults() {
-  const visible = filteredLeads();
-
-  if (!hasSearched) {
-    els.results.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">🔍</div>
-        <p>Configurá la zona en el mapa, elegí un servicio y tocá <strong>Buscar leads</strong>.</p>
-      </div>`;
-    els.summary.hidden = true;
-    return;
+function groupVisibleLeadsByRubro(visible) {
+  const order = [];
+  const groups = new Map();
+  for (const lead of visible) {
+    const key = lead.business_type || lead.business_type_label || "other";
+    const label = lead.business_type_label || "Otros";
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, leads: [] });
+      order.push(key);
+    }
+    groups.get(key).leads.push(lead);
   }
+  return order.map((k) => groups.get(k));
+}
 
-  els.summary.hidden = !els.summary.textContent;
+function leadCardHtml(lead, { hideRubroBadge = false } = {}) {
+  const id = leadId(lead);
+  const checked = selectedIds.has(id) ? "checked" : "";
+  const selectedClass = selectedIds.has(id) ? "selected" : "";
+  const reviewsLabel = lead.reviews_count > 1 ? `${lead.reviews_count} reseñas` : "1 reseña";
+  const waDisabled = lead.phone ? "" : " disabled title=\"Sin teléfono en Google\"";
+  const emailDisabled = lead.email ? "" : " disabled title=\"Google no publica email para este negocio\"";
 
-  if (!leads.length) {
-    els.results.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">📭</div>
-        <p><strong>No se encontraron leads</strong> en esta búsqueda.</p>
-        <p class="empty-hint">Probá aumentar el radio o la cantidad de lugares, o usá una categoría sugerida abajo.</p>
-      </div>`;
-    return;
-  }
-
-  if (!visible.length) {
-    els.results.innerHTML = `
-      <div class="empty">
-        <p>No hay leads con el filtro <strong>${activeFilter}</strong>.</p>
-        <p class="empty-hint">Probá el filtro <strong>Todos</strong> o <strong>Low</strong>.</p>
-      </div>`;
-    return;
-  }
-
-  els.results.innerHTML = visible
-    .map((lead) => {
-      const id = leadId(lead);
-      const checked = selectedIds.has(id) ? "checked" : "";
-      const selectedClass = selectedIds.has(id) ? "selected" : "";
-      const reviewsLabel = lead.reviews_count > 1 ? `${lead.reviews_count} reseñas` : "1 reseña";
-      const waDisabled = lead.phone ? "" : " disabled title=\"Sin teléfono en Google\"";
-      const emailDisabled = lead.email ? "" : " disabled title=\"Google no publica email para este negocio\"";
-
-      return `
-        <article class="lead-card ${selectedClass}" data-id="${id}">
-          <input type="checkbox" ${checked} aria-label="Seleccionar lead" />
-          <div>
-            <div class="lead-header">
-              <h3>${escapeHtml(lead.place_name)}</h3>
-              <span class="badge ${lead.lead_fit}">${lead.lead_fit}</span>
-            </div>
-            <p class="meta">
-              ${escapeHtml(lead.address || "Sin dirección")}
-              ${lead.rating ? ` · ⭐ ${lead.rating}` : ""}
-              · ${reviewsLabel}
-            </p>
-            ${contactsHtml(lead)}
-            ${themesHtml(lead)}
-            ${reviewSamplesHtml(lead)}
-            ${statusSelectHtml(lead, id)}
-            <p class="reason"><strong>Resumen:</strong> ${escapeHtml(lead.reason)}</p>
-            ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch sugerido:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
-            <div class="lead-actions">
-              <button type="button" class="btn btn-secondary btn-sm" data-action="whatsapp" data-id="${id}"${waDisabled}>WhatsApp</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-action="email" data-id="${id}"${emailDisabled}>Email</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-action="bot" data-id="${id}">Bot de ventas</button>
-            </div>
+  return `
+    <article class="lead-card ${selectedClass}" data-id="${id}">
+      <input type="checkbox" ${checked} aria-label="Seleccionar lead" />
+      <div>
+        <div class="lead-header">
+          <h3>${escapeHtml(lead.place_name)}</h3>
+          <div class="lead-badges">
+            ${!hideRubroBadge && lead.business_type_label ? `<span class="badge rubro">${escapeHtml(lead.business_type_label)}</span>` : ""}
+            ${lead.recommended_project_name ? `<span class="badge service">${escapeHtml(lead.recommended_project_name)}</span>` : ""}
+            <span class="badge ${lead.lead_fit}">${lead.lead_fit}</span>
           </div>
-        </article>`;
-    })
-    .join("");
+        </div>
+        <p class="meta">
+          ${escapeHtml(lead.address || "Sin dirección")}
+          ${lead.rating ? ` · ⭐ ${lead.rating}` : ""}
+          · ${reviewsLabel}
+        </p>
+        ${contactsHtml(lead, id)}
+        ${themesHtml(lead)}
+        ${reviewSamplesHtml(lead)}
+        ${statusSelectHtml(lead, id)}
+        <p class="reason"><strong>Resumen:</strong> ${escapeHtml(lead.reason)}</p>
+        ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch sugerido:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
+        ${lead.solution_value ? `<p class="solution-value"><strong>Cómo mejora la solución:</strong> ${escapeHtml(lead.solution_value)}</p>` : ""}
+        <div class="lead-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-action="whatsapp" data-id="${id}"${waDisabled}>WhatsApp</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="email" data-id="${id}"${emailDisabled}>Email</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="bot" data-id="${id}">Bot de ventas</button>
+        </div>
+      </div>
+    </article>`;
+}
 
+function bindLeadCardEvents() {
   els.results.querySelectorAll(".lead-card").forEach((card) => {
     const id = card.dataset.id;
     const checkbox = card.querySelector('input[type="checkbox"]');
@@ -671,8 +792,14 @@ function renderResults() {
     });
 
     card.addEventListener("click", (e) => {
-      if (e.target.closest("button, a, input")) return;
+      if (e.target.closest("button, a, input, select, textarea")) return;
       toggle();
+    });
+
+    card.querySelector('[data-action="phone-whatsapp"]')?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openWhatsAppForLead(id);
     });
 
     card.querySelector('[data-action="whatsapp"]')?.addEventListener("click", (e) => {
@@ -699,6 +826,61 @@ function renderResults() {
   renderLeadPins();
 }
 
+function renderResults() {
+  const visible = filteredLeads();
+
+  if (!hasSearched) {
+    els.results.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🔍</div>
+        <p>Configurá la zona en el mapa y tocá <strong>Generar leads</strong>. La IA detectará rubro y servicio por cada negocio.</p>
+      </div>`;
+    els.summary.hidden = true;
+    return;
+  }
+
+  els.summary.hidden = !els.summary.textContent;
+
+  if (!leads.length) {
+    els.results.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <p><strong>No se encontraron leads</strong> en esta búsqueda.</p>
+        <p class="empty-hint">Probá aumentar el radio o la cantidad de lugares a escanear.</p>
+      </div>`;
+    return;
+  }
+
+  if (!visible.length) {
+    els.results.innerHTML = `
+      <div class="empty">
+        <p>No hay leads con el filtro actual.</p>
+        <p class="empty-hint">Probá <strong>Todos</strong> u otro rubro.</p>
+      </div>`;
+    return;
+  }
+
+  const groups = groupVisibleLeadsByRubro(visible);
+  const multipleGroups = groups.length > 1;
+
+  els.results.innerHTML = groups
+    .map(
+      (group) => `
+    <section class="rubro-group">
+      <header class="rubro-group-header">
+        <h3>${escapeHtml(group.label)}</h3>
+        <span class="rubro-group-count">${group.leads.length} lead${group.leads.length === 1 ? "" : "s"}</span>
+      </header>
+      <div class="rubro-group-leads">
+        ${group.leads.map((lead) => leadCardHtml(lead, { hideRubroBadge: multipleGroups })).join("")}
+      </div>
+    </section>`
+    )
+    .join("");
+
+  bindLeadCardEvents();
+}
+
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text ?? "";
@@ -710,8 +892,9 @@ function getLeadById(id) {
   return lead ? { lead } : null;
 }
 
-function showMessageModal(title, html, message) {
+function showMessageModal(title, html, message, leadId = null) {
   document.getElementById("modal-title").textContent = title;
+  activeModalLeadId = leadId;
   let bodyHtml = html;
   if (message.contact_phone) {
     bodyHtml += `<p class="contact-note">Teléfono Google: ${escapeHtml(message.contact_phone)}</p>`;
@@ -721,8 +904,14 @@ function showMessageModal(title, html, message) {
   }
   els.messageModalBody.innerHTML = bodyHtml;
   currentMessageBody = message.body || message;
-  els.whatsappOpenBtn.hidden = !message.whatsapp_link;
-  if (message.whatsapp_link) els.whatsappOpenBtn.href = message.whatsapp_link;
+  if (leadId && message.body) cacheLeadMessage(leadId, message);
+  els.whatsappOpenBtn.hidden = !message.whatsapp_link && !leadId;
+  if (message.whatsapp_link) {
+    els.whatsappOpenBtn.href = message.whatsapp_link;
+  } else if (leadId) {
+    const found = getLeadById(leadId);
+    if (found?.lead.phone) els.whatsappOpenBtn.href = whatsappHref(found.lead.phone, currentMessageBody);
+  }
   els.emailOpenBtn.hidden = !message.email_link;
   if (message.email_link) els.emailOpenBtn.href = message.email_link;
   els.messageModal.hidden = false;
@@ -730,6 +919,7 @@ function showMessageModal(title, html, message) {
 
 function closeMessageModal() {
   els.messageModal.hidden = true;
+  activeModalLeadId = null;
 }
 
 async function openMessageForLead(id, channel = "whatsapp") {
@@ -749,7 +939,7 @@ async function openMessageForLead(id, channel = "whatsapp") {
   try {
     const data = await apiPost("/api/outreach/message", {
       lead: leadInputFrom(found.lead),
-      ...projectPayload(),
+      ...projectPayload(found.lead),
       channel,
     });
 
@@ -758,7 +948,7 @@ async function openMessageForLead(id, channel = "whatsapp") {
       <p>${escapeHtml(data.body)}</p>
       ${data.tips ? `<div class="message-tips"><strong>Tip:</strong> ${escapeHtml(data.tips)}</div>` : ""}`;
     const title = channel === "email" ? `Email para ${found.lead.place_name}` : `WhatsApp para ${found.lead.place_name}`;
-    showMessageModal(title, html, data);
+    showMessageModal(title, html, data, channel === "whatsapp" ? id : null);
   } catch (err) {
     showError(err.message);
   } finally {
@@ -777,8 +967,11 @@ async function openBulkMessages() {
   try {
     const data = await apiPost("/api/outreach/messages/bulk", {
       leads: selected.map(({ lead }) => leadInputFrom(lead)),
-      ...projectPayload(),
       channel: els.bulkChannel.value,
+    });
+
+    data.messages.forEach((item) => {
+      cacheLeadMessage(item.place_id, item.message);
     });
 
     const html = data.messages
@@ -837,7 +1030,7 @@ async function startBotConversation() {
   try {
     const data = await apiPost("/api/outreach/chat", {
       lead: leadInputFrom(activeLeadForBot),
-      ...projectPayload(),
+      ...projectPayload(activeLeadForBot),
       messages: [],
     });
     botMessages = [{ role: "assistant", content: data.reply }];
@@ -864,7 +1057,7 @@ async function sendBotReply() {
   try {
     const data = await apiPost("/api/outreach/chat", {
       lead: leadInputFrom(activeLeadForBot),
-      ...projectPayload(),
+      ...projectPayload(activeLeadForBot),
       messages: botMessages,
     });
     botMessages.push({ role: "assistant", content: data.reply });
@@ -910,9 +1103,7 @@ async function runSearch() {
     const data = await apiPost("/api/search", {
       center,
       radius_km: Number(els.radius.value),
-      business_type: els.businessType.value,
       max_places: Number(els.maxPlaces.value),
-      project_id: els.projectSelect.value,
       ...searchFiltersPayload(),
     });
     applySearchResponse(data);
@@ -932,17 +1123,18 @@ function exportSelected() {
   if (!rows.length) return;
 
   const headers = [
-    "negocio", "telefono", "email", "web", "direccion", "rating_negocio",
-    "relevancia", "temas", "cantidad_resenas", "resenas", "razon", "pitch", "place_id", "google_maps",
+    "negocio", "rubro", "servicio_recomendado", "telefono", "email", "web", "direccion", "rating_negocio",
+    "relevancia", "temas", "cantidad_resenas", "resenas", "razon", "pitch", "como_ayuda_solucion", "place_id", "google_maps",
   ];
 
   const csvLines = [
     headers.join(","),
     ...rows.map((r) =>
       [
-        r.place_name, r.phone || "", r.email || "", r.website || "", r.address || "", r.rating ?? "",
-        r.lead_fit, (r.themes || []).join("; "), r.reviews_count || 1, r.review_text, r.reason,
-        r.suggested_pitch || "", r.place_id, r.google_maps_url || "",
+        r.place_name, r.business_type_label || "", r.recommended_project_name || "", r.phone || "", r.email || "",
+        r.website || "", r.address || "", r.rating ?? "", r.lead_fit, (r.themes || []).join("; "),
+        r.reviews_count || 1, r.review_text, r.reason, r.suggested_pitch || "", r.solution_value || "",
+        r.place_id, r.google_maps_url || "",
       ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
     ),
   ];
@@ -951,14 +1143,13 @@ function exportSelected() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `leads-${els.projectSelect.value}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `leads-discovery-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 function bindEvents() {
   els.radius.addEventListener("input", updateCircle);
-  els.projectSelect.addEventListener("change", onProjectChange);
   els.searchBtn.addEventListener("click", runSearch);
 
   document.getElementById("geocode-btn").addEventListener("click", async () => {
@@ -967,16 +1158,29 @@ function bindEvents() {
     hideError();
     setLoading(true);
     try {
-      const pos = await geocodeAddress(q);
-      center = pos;
-      marker.setLatLng([pos.lat, pos.lng]);
-      map.setView([pos.lat, pos.lng], 14);
-      updateCircle();
+      await geocodeAddress(q, { autoPickSingle: false });
     } catch (err) {
       showError(err.message);
+      hideGeocodeSuggestions();
     } finally {
       setLoading(false);
     }
+  });
+
+  els.addressSearch.addEventListener("input", () => {
+    clearTimeout(geocodeDebounce);
+    const q = els.addressSearch.value.trim();
+    if (q.length < 2) {
+      hideGeocodeSuggestions();
+      return;
+    }
+    geocodeDebounce = setTimeout(async () => {
+      try {
+        await geocodeAddress(q, { autoPickSingle: false });
+      } catch {
+        hideGeocodeSuggestions();
+      }
+    }, 450);
   });
 
   els.addressSearch.addEventListener("keydown", (e) => {
@@ -984,11 +1188,24 @@ function bindEvents() {
       e.preventDefault();
       document.getElementById("geocode-btn").click();
     }
+    if (e.key === "Escape") hideGeocodeSuggestions();
   });
 
-  document.querySelectorAll(".chip").forEach((chip) => {
+  els.locationPreset.addEventListener("change", () => {
+    const preset = locationPresets.find((p) => p.id === els.locationPreset.value);
+    if (!preset) return;
+    hideError();
+    applyGeocodeResult(preset);
+    hideGeocodeSuggestions();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".geocode-wrap")) hideGeocodeSuggestions();
+  });
+
+  els.fitFilters.querySelectorAll(".chip").forEach((chip) => {
     chip.addEventListener("click", () => {
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      els.fitFilters.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
       activeFilter = chip.dataset.filter;
       renderResults();
@@ -1007,8 +1224,7 @@ function bindEvents() {
 
   els.exportBtn.addEventListener("click", exportSelected);
   els.messagesBtn.addEventListener("click", openBulkMessages);
-  els.saveCustomBtn.addEventListener("click", saveCustomProject);
-  els.deleteCustomBtn.addEventListener("click", deleteCustomProject);
+  els.saveCustomBtn?.addEventListener("click", saveCustomProject);
   els.historyBtn.addEventListener("click", openHistoryDrawer);
 
   document.querySelectorAll("[data-close-history]").forEach((el) => {
@@ -1039,7 +1255,8 @@ function bindEvents() {
 async function init() {
   initMap();
   bindEvents();
-  await loadProjects();
+  await loadServiceCatalog();
+  await loadLocationPresets();
   renderResults();
 }
 

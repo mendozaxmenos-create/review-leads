@@ -2,15 +2,18 @@
 
 App para buscar reseñas de Google en una zona geográfica, clasificarlas con IA y detectar leads potenciales para tus proyectos.
 
+**Producción:** https://review-leads.fly.dev/
+
 ## Qué hace
 
-1. Define un punto central (lat/lng) y un radio en km
-2. Busca negocios cercanos vía **Google Places API (New)**
+1. Define un punto central (mapa, geocodificación o presets de Argentina)
+2. Busca negocios cercanos en **todos los rubros** vía **Google Places API (New)**
 3. Obtiene reseñas y contactos (teléfono, web, Maps)
-4. Clasifica cada reseña con **OpenAI** según tu servicio
-5. **Agrupa por negocio** y extrae temas de queja (ej. *Tiempos de espera*, *Mala atención*)
-6. Devuelve leads ordenados por relevancia (`high`, `medium`, `low`)
-7. Genera mensajes de outreach y enlaces directos a WhatsApp con el teléfono de Google
+4. Clasifica cada reseña con **OpenAI** y detecta automáticamente qué servicio encaja
+5. **Excluye** entidades no prospectables (comisarías, municipalidades, etc.)
+6. **Agrupa por negocio** y por **rubro** en la UI; extrae temas de queja
+7. Devuelve leads con pitch, valor de la solución y reseñas en español
+8. Genera mensajes de outreach (WhatsApp / email) y simula conversación con bot de ventas
 
 ## Requisitos
 
@@ -18,7 +21,7 @@ App para buscar reseñas de Google en una zona geográfica, clasificarlas con IA
 - [Google Places API (New)](https://developers.google.com/maps/documentation/places/web-service/overview) habilitada
 - API key de OpenAI
 
-## Setup
+## Setup local
 
 ```bash
 cd review-leads
@@ -35,9 +38,14 @@ GOOGLE_PLACES_API_KEY=tu_clave
 OPENAI_API_KEY=tu_clave
 OPENAI_MODEL=gpt-4o-mini
 
-# Opcional — persistencia local
+# Opcional
 DATABASE_PATH=data/review-leads.db
 CACHE_TTL_HOURS=24
+NOMINATIM_CONTACT_EMAIL=tu@email.com
+
+# Remitente de mensajes (WhatsApp, email, bot)
+OUTREACH_SENDER_NAME=Gustavo
+OUTREACH_SENDER_COMPANY=SofIA
 ```
 
 ## Ejecutar
@@ -46,243 +54,208 @@ CACHE_TTL_HOURS=24
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Abrí **http://127.0.0.1:8000** en el navegador. Documentación interactiva: http://127.0.0.1:8000/docs
+- UI principal: http://127.0.0.1:8000
+- Panel CRM: http://127.0.0.1:8000/admin
+- API docs: http://127.0.0.1:8000/docs
 
 ## Usar la interfaz
 
-Desde la UI podés:
+### Motor de prospección (modo descubrimiento)
 
-- Buscar una dirección o elegir el punto en el mapa (Leaflet)
-- Ajustar radio y cantidad máxima de lugares (1–60)
-- Elegir servicio y tipo de negocio
-- Ver leads con **temas de queja agrupados** y muestras de reseñas
-- Filtrar por relevancia (high / medium / low)
-- Seleccionar leads y exportar a CSV
-- **WhatsApp**: genera mensaje y abre `wa.me` con el teléfono de Google
-- **Email**: genera mensaje y abre `mailto:` si hay email (ver limitación abajo)
-- **Bot de ventas**: simula conversación para cerrar el lead
-- **Mensajes masivos** para leads seleccionados (WhatsApp o email)
-- **Sugerencias de categoría** cuando hay pocos leads o la categoría no encaja
-- **Filtros de calidad**: reseñas ≤ 3★, límite por negocio, rating máximo del local
-- **Caché** de búsquedas (24 h) para repetir la misma zona sin gastar APIs
-- **Servicio propio**: crear/editar/eliminar perfiles de venta custom
-- **Historial** de búsquedas anteriores (botón en el header)
-- **Estado del lead** en cada tarjeta (Nuevo → Contactado → Cerrado…)
-- **Pins en el mapa** con la ubicación de cada lead
+- **Geocodificación**: buscá una dirección, usá presets de Argentina o arrastrá el marcador
+- **Todos los rubros**: la búsqueda recorre restaurantes, abogados, hoteles, etc. sin elegir manualmente
+- **IA multi-servicio**: cada lead trae `recommended_project_id` (bot de reservas, CRM, etc.)
+- **Filtros de calidad**: reseñas ≤ 3★, límite por negocio, rating máximo del local, caché 24 h
+- **Resultados agrupados por rubro** con chips para filtrar
+
+### Cada lead incluye
+
+- Temas de queja detectados en reseñas de Google
+- Reseñas traducidas al español cuando vienen en otro idioma
+- **Pitch sugerido** y **Cómo mejora la solución**
+- Contactos de Google (teléfono, web, Maps)
+- Estado CRM (pendiente → contacto → respondió → cerrado / descartado)
+
+### Outreach
+
+| Acción | Descripción |
+|--------|-------------|
+| **WhatsApp** | Genera mensaje y abre `wa.me` con el teléfono de Google |
+| **Email** | Genera mensaje y abre `mailto:` si hay email (raro en Google Places) |
+| **Bot de ventas** | Simula conversación para practicar el cierre (no envía WhatsApp real) |
+
+**Reglas del primer contacto** (configuradas en `app/data/outreach_guidelines.py`):
+
+- El remitente es **Gustavo de SofIA** (configurable con `OUTREACH_SENDER_*`), no el negocio contactado
+- Los dolores se atribuyen explícitamente a **reseñas de clientes en Google**
+- Se presentan **2–3 opciones** de solución y se pregunta si hay interés
+- **No** se propone reunión en el primer mensaje (solo en etapas avanzadas del bot)
+
+### Panel admin (`/admin`)
+
+Pipeline de estados, notas, mensajes WhatsApp y seguimiento de leads guardados.
 
 ## Modelo de lead (por negocio)
 
-Cada lead representa **un negocio**, no una reseña suelta:
-
 | Campo | Descripción |
 |-------|-------------|
-| `themes` | Etiquetas de dolor ordenadas por frecuencia |
-| `theme_counts` | Conteo por tema, ej. `{"Tiempos de espera": 2}` |
-| `reviews_count` | Cantidad de reseñas relevantes del negocio |
-| `review_samples` | Hasta 3 reseñas con su tema |
-| `phone` / `website` / `google_maps_url` | Contactos desde Google Places |
-| `lat` / `lng` | Ubicación del negocio (para pins en mapa) |
-| `status` / `saved_lead_id` | Estado CRM persistido en SQLite |
+| `business_type_label` | Rubro comercial (Restaurante, Abogados, etc.) |
+| `recommended_project_id` / `recommended_project_name` | Servicio sugerido por la IA |
+| `themes` / `theme_counts` | Dolores detectados en reseñas |
+| `solution_value` | Cómo la solución mejora esos dolores |
+| `suggested_pitch` | Primer contacto sugerido |
+| `review_samples` | Reseñas en español con tema |
+| `phone` / `website` / `google_maps_url` | Contactos desde Google |
+| `status` / `saved_lead_id` | Estado CRM en SQLite |
 
-La clasificación IA devuelve por reseña: `lead_fit`, `theme`, `reason`, `suggested_pitch`. El backend agrupa por `place_id` en `app/routers/search.py`.
+## API principal
 
-## Contactos y outreach
+### Búsqueda
 
-- **WhatsApp**: el link `wa.me/{teléfono}` se construye en código con el teléfono de Google, no lo inventa la IA.
-- **Email**: el link `mailto:` usa el email de Google si existe en el lead.
-- **Limitación**: la [Places API (New)](https://developers.google.com/maps/documentation/places/web-service/data-fields) **no expone email** de negocios. Solo teléfono y web. Por eso el botón Email suele estar deshabilitado. El campo `email` está preparado por si Google lo agrega o se integra otra fuente.
+```bash
+curl -X POST http://127.0.0.1:8000/api/search \
+  -H "Content-Type: application/json" \
+  -d "{\"center\":{\"lat\":-32.8895,\"lng\":-68.8458},\"radius_km\":10,\"max_places\":30,\"max_review_rating\":3,\"use_cache\":false}"
+```
 
-Endpoints de outreach (`app/routers/outreach.py`):
+`business_type` y `project_id` son opcionales (modo descubrimiento = todos los rubros).
+
+### Geocodificación
 
 | Método | Ruta | Función |
 |--------|------|---------|
-| `POST` | `/api/outreach/message` | Mensaje para un lead (`channel`: `whatsapp`, `email`, `linkedin`) |
+| `GET` | `/api/geocode/search?q=mendoza` | Sugerencias de ubicación |
+| `GET` | `/api/geocode/presets` | Provincias y zonas de Argentina |
+
+### Outreach
+
+| Método | Ruta | Función |
+|--------|------|---------|
+| `POST` | `/api/outreach/message` | Mensaje para un lead (`channel`: `whatsapp`, `email`) |
 | `POST` | `/api/outreach/messages/bulk` | Mensajes masivos |
-| `POST` | `/api/outreach/chat` | Bot de ventas |
+| `POST` | `/api/outreach/chat` | Bot de ventas (simulación) |
+
+### Historial y CRM
+
+| Método | Ruta | Función |
+|--------|------|---------|
+| `GET` | `/api/history/searches` | Listar búsquedas guardadas |
+| `GET` | `/api/history/searches/{id}` | Recuperar resultado |
+| `PATCH` | `/api/history/leads/{id}` | Actualizar estado o notas |
+| `GET` | `/api/admin/leads` | Panel admin — listar leads |
+
+Estados: `0` Pendiente → `1` Contacto → `2` Respondió → `3` Cerrado → `4` Descartado
 
 ## Servicios predefinidos
 
-`GET /api/projects` lista los servicios:
+`GET /api/projects` — IDs: `ai`, `booking-bot`, `crm`, `it-solutions`, `apps`, `cursor-dev`
 
-| ID | Servicio |
-|---|---|
-| `ai` | Soluciones con IA |
-| `booking-bot` | Bot de reservas |
-| `crm` | CRM a medida |
-| `it-solutions` | Soluciones informáticas |
-| `apps` | Apps y desarrollo web |
-| `cursor-dev` | Desarrollo ágil con Cursor |
-
-Definidos en `app/data/services.py`. Podés agregar servicios propios vía UI o API (ver abajo).
-
-### Servicios custom
-
-| Método | Ruta | Función |
-|--------|------|---------|
-| `POST` | `/api/projects/custom` | Crear servicio propio |
-| `PUT` | `/api/projects/custom/{id}` | Editar servicio propio |
-| `DELETE` | `/api/projects/custom/{id}` | Eliminar servicio propio |
-
-Los IDs custom tienen prefijo `custom-`.
+Definidos en `app/data/services.py`. Servicios custom vía UI o `POST /api/projects/custom`.
 
 ## Estructura del proyecto
 
 ```
 app/
-├── main.py                 # FastAPI + UI estática
-├── config.py               # Settings desde .env
-├── models/schemas.py       # Pydantic (Search, Lead, Outreach)
+├── main.py
+├── config.py                    # Settings + outreach_sender_signature()
+├── models/
+│   ├── schemas.py
+│   └── lead_status.py
 ├── routers/
-│   ├── search.py           # POST /api/search — búsqueda, caché y agrupación
-│   ├── projects.py         # GET /api/projects + CRUD servicios custom
-│   ├── history.py          # Historial de búsquedas y estado de leads
-│   └── outreach.py         # Mensajes y bot
-├── db/
-│   └── store.py            # SQLite: caché, proyectos, historial, leads
+│   ├── search.py                # Descubrimiento multi-rubro
+│   ├── geocode.py
+│   ├── admin.py
+│   ├── history.py
+│   ├── outreach.py
+│   └── projects.py
+├── db/store.py                  # SQLite: caché, historial, CRM
 ├── services/
-│   ├── cache.py            # Claves de caché de búsqueda
-│   ├── places.py           # Google Places API
-│   ├── classifier.py       # Clasificación OpenAI + themes
-│   ├── category_suggester.py
-│   └── outreach.py         # Mensajes + links de contacto
+│   ├── places.py                # Google Places + prioriza reseñas en español
+│   ├── classifier.py            # Clasificación + detección de servicio
+│   ├── geocode.py               # Nominatim + fallback Google
+│   └── outreach.py              # Mensajes + bot
 ├── data/
-│   ├── services.py         # Perfiles de servicio
-│   └── business_types.py
-└── static/                 # UI (HTML, CSS, JS, mapa)
+│   ├── services.py
+│   ├── business_types.py
+│   ├── lead_filters.py          # Excluye gobierno; permite abogados
+│   ├── outreach_guidelines.py   # Tono, Google reviews, CTA
+│   └── ar_locations.py          # Presets Argentina
+└── static/                      # UI + admin
+fly.toml                         # Deploy Fly.io
+Dockerfile
 ```
 
-## Ejemplo de búsqueda (API)
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/search ^
-  -H "Content-Type: application/json" ^
-  -d "{\"center\":{\"lat\":-34.6037,\"lng\":-58.3816},\"radius_km\":2,\"business_type\":\"restaurant\",\"project_id\":\"booking-bot\",\"max_places\":10}"
-```
-
-Respuesta incluye `leads[]` con `themes`, `theme_counts`, `review_samples`, etc.
-
-## Tipos de negocio (Google Places)
-
-Valores válidos para `business_type`: `restaurant`, `cafe`, `gym`, `store`, `hair_salon`, `dentist`, `real_estate_agency`, etc.
-
-[Lista completa de tipos](https://developers.google.com/maps/documentation/places/web-service/place-types)
-
-## Filtros de calidad (UI y API)
-
-Parámetros opcionales en `POST /api/search`:
+## Filtros de calidad (API)
 
 | Parámetro | Default | Descripción |
 |-----------|---------|-------------|
-| `max_review_rating` | `3` | Solo clasifica reseñas con rating ≤ este valor. `null` = todas |
-| `max_reviews_per_place` | `5` | Máximo de reseñas enviadas a OpenAI por negocio (prioriza las peores) |
+| `max_review_rating` | `3` | Solo reseñas con rating ≤ este valor. `null` = todas |
+| `max_reviews_per_place` | `5` | Máx. reseñas a clasificar por negocio |
 | `max_place_rating` | `null` | Solo negocios con rating ≤ este valor |
-| `use_cache` | `true` | Reutilizar resultado cacheado (misma zona + filtros + servicio) |
+| `max_places` | `24` | Lugares a escanear (8–60). Más = más leads, más costo |
+| `use_cache` | `true` | Reutilizar búsqueda cacheada (24 h) |
 
-La respuesta incluye `reviews_fetched`, `reviews_classified`, `reviews_skipped`, `from_cache` y `search_history_id`.
+## Producción — Fly.io (recomendado)
 
-## Caché, historial y CRM liviano
+URL: **https://review-leads.fly.dev/** · Región: `gru` (São Paulo)
 
-Persistencia local en SQLite (`data/review-leads.db`, configurable en `.env`):
+### Deploy
 
-| Función | API / UI |
-|---------|----------|
-| Caché de búsquedas (24 h) | `use_cache: true` · checkbox en UI |
-| Historial de búsquedas | `GET /api/history/searches` · botón **Historial** |
-| Recuperar búsqueda | `GET /api/history/searches/{id}` |
-| Estado del lead | `PATCH /api/history/leads/{id}` · selector en cada tarjeta |
-| Servicios propios | `POST/PUT/DELETE /api/projects/custom` · panel **Servicio propio** |
+```bash
+# Instalar CLI: https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+fly deploy --depot=false
+```
 
-Estados de lead: `new`, `contacted`, `responded`, `closed`, `discarded`.
+Si el builder Depot falla por timeout, usá siempre `--depot=false`.
 
-| Método | Ruta | Función |
-|--------|------|---------|
-| `GET` | `/api/history/searches` | Listar búsquedas guardadas |
-| `GET` | `/api/history/searches/{id}` | Recuperar resultado completo |
-| `GET` | `/api/history/leads` | Listar leads guardados (`?status=contacted`) |
-| `PATCH` | `/api/history/leads/{id}` | Actualizar estado o notas |
+### Secrets
 
-## Producción (Render — plan gratis)
+```bash
+fly secrets set \
+  GOOGLE_PLACES_API_KEY=tu_clave \
+  OPENAI_API_KEY=tu_clave \
+  OPENAI_MODEL=gpt-4o-mini \
+  OUTREACH_SENDER_NAME=Gustavo \
+  OUTREACH_SENDER_COMPANY=SofIA \
+  DATABASE_PATH=/tmp/review-leads.db \
+  DEBUG=false
+```
 
-### Limitaciones del plan free ($0)
+### Plan free — limitaciones
 
 | Qué | En free |
 |-----|---------|
-| Costo | $0, sin tarjeta (cuenta nueva) |
-| Búsquedas largas (1–3 min) | OK — timeout hasta ~100 min |
-| Primer acceso tras 15 min sin uso | ~1 min de “despertar” (cold start) |
-| Horas/mes | 750 h (alcanza para 1 app casi 24/7) |
-| **Historial / caché / servicios custom** | **Se pierden** al reiniciar o redeployar (sin disco persistente) |
-| Búsqueda + leads + WhatsApp | Funciona igual |
+| Cold start | ~30–60 s tras inactividad |
+| SQLite | Efímero en `/tmp` (historial/CRM se pierde al reiniciar máquina) |
+| Health check | `/health` — grace period 20 s |
 
-La app en prod gratis sirve para **usar y probar**. El CRM local (historial, estados) es volátil hasta que pagues disco o uses DB externa.
+Para persistencia real: volumen Fly o PostgreSQL externo.
 
-### Pasos para desplegar
+### Verificar
 
-**1. Cuenta**
+```bash
+fly status -a review-leads
+curl https://review-leads.fly.dev/health
+```
 
-- Entrá a [render.com](https://render.com) → **Get Started**
-- Registrate con **GitHub** (la misma cuenta del repo `schejtergustavo/review-leads`)
+## Producción alternativa — Render (free)
 
-**2. Crear el servicio**
+Ver sección histórica en commits anteriores. Render apaga el servicio tras 15 min sin tráfico; Fly.io con `auto_start_machines` es la opción actual en prod.
 
-Opción A — **Blueprint** (recomendada):
-
-1. Dashboard → **New +** → **Blueprint**
-2. Conectá el repo `review-leads`
-3. Render lee `render.yaml` solo
-4. Te pedirá valores para:
-   - `GOOGLE_PLACES_API_KEY`
-   - `OPENAI_API_KEY`
-5. **Apply**
-
-Opción B — **Manual**:
-
-1. **New +** → **Web Service**
-2. Repo: `schejtergustavo/review-leads`, rama `main`
-3. **Language**: Docker
-4. **Instance type**: **Free**
-5. Variables de entorno (ver abajo)
-6. **Health Check Path**: `/health`
-7. **Create Web Service**
-
-**3. Variables de entorno** (Environment)
-
-| Variable | Valor |
-|----------|--------|
-| `GOOGLE_PLACES_API_KEY` | tu clave de Google |
-| `OPENAI_API_KEY` | tu clave de OpenAI |
-| `OPENAI_MODEL` | `gpt-4o-mini` |
-| `DEBUG` | `false` |
-| `DATABASE_PATH` | `/tmp/review-leads.db` |
-| `CACHE_TTL_HOURS` | `24` |
-
-**4. Esperar el deploy**
-
-- Primera build: 3–8 minutos
-- URL final: `https://review-leads-xxxx.onrender.com` (o el nombre que elijas)
-
-**5. Probar**
-
-- Abrí la URL → deberías ver la UI
-- Si estuvo dormida 15+ min, la primera carga tarda ~1 min (pantalla de Render “waking up”)
-- Hacé una búsqueda de prueba con pocos lugares (5–10)
-
-### Si el deploy falla
-
-- **Build error**: revisá **Logs** en el dashboard del servicio
-- **502 al buscar**: faltan API keys o están mal en Environment
-- **Blueprint pide disco / pago**: no agregues disk; usá el `render.yaml` del repo (sin bloque `disk`)
-
-### Mantener despierto (opcional, free)
-
-Render apaga el servicio tras **15 min sin tráfico**. Para portfolio/demo está bien. No hay forma oficial gratis de evitarlo sin un ping externo (ej. cron en otro servicio cada 14 min) — no es necesario para empezar.
-
-Alternativa manual con Docker:
+Deploy manual Docker:
 
 ```bash
 docker build -t review-leads .
 docker run -p 8000:8000 --env-file .env -v review-leads-data:/app/data review-leads
 ```
+
+## Costos y rendimiento
+
+- Modo descubrimiento: ~15 tipos de negocio × lugares por rubro + detalle con reseñas
+- Cada reseña clasificada = **1 llamada OpenAI**
+- Búsqueda de 24–30 lugares puede tardar 1–3 minutos
+- Subí `max_places` a 40–60 y desactivá caché para más resultados
 
 ## Retomar el proyecto
 
@@ -292,45 +265,16 @@ cd review-leads
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-1. Configurá `.env` (Google + OpenAI)
-2. Abrí http://127.0.0.1:8000
-3. Elegí zona, servicio y filtros → **Buscar leads**
-4. Revisá **Historial** para búsquedas anteriores
-5. Cambiá **Estado** en leads que ya contactaste
+1. Configurá `.env` (Google + OpenAI + remitente outreach)
+2. Abrí http://127.0.0.1:8000 → elegí zona → **Generar leads**
+3. Contactá por WhatsApp o usá el bot de ventas para practicar
+4. Seguí leads en http://127.0.0.1:8000/admin
 
-La base SQLite (`data/review-leads.db`) guarda caché, servicios custom, historial y estados. Se crea sola al arrancar.
+## Changelog reciente
 
-## Costos y rendimiento
-
-- Cada búsqueda llama a Google Places por cada lugar + detalle con reseñas.
-- Cada reseña genera **una llamada a OpenAI** para clasificar.
-- Búsquedas con 15–20 lugares y ~5 reseñas/lugar pueden tardar 1–3 minutos.
-- Las sugerencias de categoría hacen búsquedas adicionales en Google si hay pocos leads.
-
-## Próximos pasos sugeridos
-
-Hecho recientemente:
-
-- Filtros de rating y límite de reseñas por negocio
-- Caché SQLite con TTL
-- Servicios custom (CRUD)
-- Historial de búsquedas + estado de leads
-- Pins de leads en mapa, progreso de búsqueda, canal bulk WhatsApp/email
-
-Pendiente:
-
-1. **Email alternativo** — extraer contacto desde web del negocio (Google no publica email)
-2. **Dashboard CRM** — vista filtrada de todos los leads guardados por estado
-3. **Invalidar caché** — botón para forzar búsqueda fresca sin desactivar caché global
-4. **Batch IA** — clasificar varias reseñas en una sola llamada OpenAI
-
-## Historial reciente
-
-- MVP: búsqueda + clasificación API
-- UI web, outreach, bot de ventas, sugerencias de categoría
-- Fix parseo de reseñas Google (texto localizado como objeto)
-- Leads agrupados por negocio con temas de queja
-- Links WhatsApp/email desde contactos reales de Google
-- Filtros de rating y límite de reseñas por negocio
-- SQLite: caché, historial, servicios custom, estado de leads
-- Pins en mapa, progreso de búsqueda, bulk por canal
+- Modo descubrimiento multi-rubro con detección automática de servicio
+- Geocodificación Argentina (Nominatim + presets + fallback Google)
+- Filtros de entidades no prospectables (gobierno); estudios de abogados sí incluidos
+- Agrupación por rubro, `solution_value`, reseñas en español
+- Outreach: remitente configurable, dolores atribuidos a Google, CTA por interés (sin reunión inicial)
+- Panel admin CRM, deploy Fly.io, fix `.gitignore` para `app/data/`

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel CRM — Review Leads</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body class="admin-body">
+    <header>
+      <div class="header-row">
+        <div>
+          <h1>Panel de administración</h1>
+          <p>Todos los leads para contactar, por servicio y estado del pipeline</p>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="refresh-btn">Actualizar</button>
+          <a href="/" class="btn btn-secondary btn-sm">← Búsqueda</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <section class="admin-stats" id="stats-row" aria-label="Resumen de leads"></section>
+
+      <section class="admin-toolbar panel">
+        <div class="admin-filters">
+          <label>
+            Estado
+            <select id="filter-status">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label>
+            Servicio
+            <select id="filter-project">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label>
+            Relevancia
+            <select id="filter-fit">
+              <option value="">Todas</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label class="admin-search-label">
+            Buscar
+            <input type="text" id="filter-search" placeholder="Negocio, dirección, tema…" />
+          </label>
+        </div>
+        <div class="admin-toolbar-actions">
+          <span class="admin-count" id="visible-count">0 leads</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="export-btn">Exportar CSV</button>
+        </div>
+      </section>
+
+      <div class="error-banner" id="error" role="alert"></div>
+
+      <section class="admin-table-wrap panel">
+        <div class="admin-table-scroll">
+          <table class="admin-table" id="leads-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Negocio</th>
+                <th>Servicio</th>
+                <th>Tipo negocio</th>
+                <th>Fit</th>
+                <th>Temas</th>
+                <th>Contacto</th>
+                <th>Estado</th>
+                <th>Notas</th>
+                <th>Actualizado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="leads-tbody">
+              <tr>
+                <td colspan="11" class="admin-empty">Cargando leads…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal" id="message-modal" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal-panel" role="dialog" aria-labelledby="modal-title">
+        <div class="modal-header">
+          <h2 id="modal-title">Mensaje para el lead</h2>
+          <button type="button" class="icon-btn" data-close-modal aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="message-modal-body"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" id="copy-message-btn">Copiar mensaje</button>
+          <a class="btn btn-primary btn-sm" id="whatsapp-open-btn" href="#" target="_blank" rel="noopener" hidden>
+            Abrir WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="loading-overlay" id="loading" aria-live="polite" hidden>
+      <div class="spinner"></div>
+      <p id="loading-text">Cargando…</p>
+    </div>
+
+    <script src="/static/js/admin.js"></script>
+  </body>
+</html>

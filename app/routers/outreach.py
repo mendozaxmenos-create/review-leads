@@ -23,7 +23,7 @@ async def generate_message(request: MessageRequest) -> OutreachMessage:
 
     return await service.generate_message(
         lead=request.lead,
-        project_id=request.project_id,
+        project_id=request.lead.recommended_project_id or request.project_id,
         project_description=request.project_description,
         channel=request.channel,
     )
@@ -40,7 +40,7 @@ async def generate_bulk_messages(request: BulkMessageRequest) -> BulkMessageResp
     for lead in request.leads:
         message = await service.generate_message(
             lead=lead,
-            project_id=request.project_id,
+            project_id=lead.recommended_project_id or request.project_id,
             project_description=request.project_description,
             channel=request.channel,
         )
@@ -64,7 +64,7 @@ async def sales_chat(request: ConversationRequest) -> ConversationResponse:
 
     return await service.converse(
         lead=request.lead,
-        project_id=request.project_id,
+        project_id=request.lead.recommended_project_id or request.project_id,
         project_description=request.project_description,
         messages=request.messages,
     )

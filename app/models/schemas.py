@@ -15,6 +15,25 @@ class GeoPoint(BaseModel):
     lng: float = Field(..., ge=-180, le=180)
 
 
+class GeocodeSuggestion(BaseModel):
+    label: str
+    lat: float
+    lng: float
+    zoom: int = 12
+    kind: str = "place"
+    source: str = "nominatim"
+
+
+class LocationPresetOut(BaseModel):
+    id: str
+    label: str
+    lat: float
+    lng: float
+    zoom: int
+    kind: str
+    group: str
+
+
 class ServiceProfileOut(BaseModel):
     id: str
     name: str
@@ -36,27 +55,27 @@ class CustomProjectUpdate(CustomProjectCreate):
 
 
 class SearchRequest(BaseModel):
-    """Busca negocios cercanos y clasifica sus reseñas como leads potenciales."""
+    """Busca negocios cercanos en todos los rubros y clasifica leads con detección automática de servicio."""
 
     center: GeoPoint
     radius_km: float = Field(..., gt=0, le=50, description="Radio de búsqueda en kilómetros")
-    business_type: str = Field(
-        default="restaurant",
-        description="Tipo de negocio (Google Places type), ej: restaurant, store, gym",
+    business_type: str | None = Field(
+        default=None,
+        description="Opcional: limitar a un rubro. null = buscar en todos los rubros",
     )
-    max_places: int = Field(default=20, ge=1, le=60)
+    max_places: int = Field(default=24, ge=1, le=60)
     project_id: str | None = Field(
         default=None,
-        description="ID de un servicio predefinido (ai, booking-bot, crm, it-solutions, apps, cursor-dev)",
+        description="Opcional: filtrar solo leads de un servicio (modo legacy)",
     )
     project_description: str | None = Field(
         default=None,
         min_length=10,
-        description="Descripción custom del servicio (si no usás project_id)",
+        description="Descripción custom (modo legacy)",
     )
     lead_criteria: str | None = Field(
         default=None,
-        description="Criterios adicionales opcionales para considerar un lead",
+        description="Criterios adicionales opcionales",
     )
     max_review_rating: int | None = Field(
         default=3,
@@ -77,12 +96,6 @@ class SearchRequest(BaseModel):
         description="Máximo de reseñas a clasificar con IA por negocio (prioriza las peores)",
     )
     use_cache: bool = Field(default=True, description="Usar caché local de búsquedas recientes")
-
-    @model_validator(mode="after")
-    def require_project_source(self) -> "SearchRequest":
-        if not self.project_id and not self.project_description:
-            raise ValueError("Indicá project_id o project_description")
-        return self
 
 
 class ReviewSnippet(BaseModel):
@@ -113,6 +126,11 @@ class ReviewLead(BaseModel):
     author: str | None = None
     reason: str
     suggested_pitch: str | None = None
+    solution_value: str | None = None
+    business_type: str | None = None
+    business_type_label: str | None = None
+    recommended_project_id: str | None = None
+    recommended_project_name: str | None = None
     saved_lead_id: int | None = None
     status: str | None = None
     notes: str | None = None
@@ -128,12 +146,19 @@ class CategorySuggestion(BaseModel):
     score: float = Field(..., ge=0, le=1)
 
 
+class RubroSummary(BaseModel):
+    business_type: str
+    business_type_label: str
+    leads_count: int
+
+
 class SearchResponse(BaseModel):
     center: GeoPoint
     radius_km: float
-    business_type: str
+    business_type: str = "all"
     project_id: str | None = None
-    project_name: str | None = None
+    project_name: str | None = "Detección automática"
+    discovery_mode: bool = True
     places_scanned: int
     reviews_fetched: int = 0
     reviews_classified: int = 0
@@ -143,6 +168,7 @@ class SearchResponse(BaseModel):
     search_history_id: int | None = None
     leads: list[ReviewLead]
     summary: str
+    rubro_summary: list[RubroSummary] = []
     category_suggestions: list[CategorySuggestion] = []
 
 
@@ -159,6 +185,8 @@ class LeadInput(BaseModel):
     lead_fit: str
     reason: str
     suggested_pitch: str | None = None
+    recommended_project_id: str | None = None
+    business_type_label: str | None = None
 
 
 class MessageRequest(BaseModel):
@@ -223,8 +251,14 @@ class LeadStatus(str, Enum):
     DISCARDED = "discarded"
 
 
+class LeadStatusInfo(BaseModel):
+    code: int
+    value: str
+    label: str
+
+
 class SavedLeadUpdate(BaseModel):
-    status: LeadStatus
+    status: LeadStatus | None = None
     notes: str | None = None
 
 
@@ -232,9 +266,24 @@ class SavedLeadOut(BaseModel):
     id: int
     place_id: str
     status: str
+    status_code: int
+    status_label: str
     notes: str | None = None
     updated_at: str
     lead: ReviewLead
+
+
+class AdminLeadOut(SavedLeadOut):
+    project_id: str | None = None
+    project_name: str | None = None
+    business_type: str | None = None
+    search_at: str | None = None
+
+
+class AdminStatsOut(BaseModel):
+    total: int
+    by_status: dict[str, int]
+    by_status_code: dict[int, int]
 
 
 class SearchHistoryItem(BaseModel):
