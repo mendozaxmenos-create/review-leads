@@ -1,3 +1,5 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Conectar repo: schejtergustavo/review-leads → New → Blueprint
 services:
   - type: web
     name: review-leads
@@ -17,6 +19,11 @@ services:
         value: /tmp/review-leads.db
       - key: CACHE_TTL_HOURS
         value: "24"
-    # Nota: plan free NO tiene disco persistente. SQLite vive en /tmp y se
-    # resetea al reiniciar o redeployar. Para historial/CRM permanente hace
-    # falta plan de pago + disk, o una DB externa.
+      - key: OUTREACH_SENDER_NAME
+        value: Gustavo
+      - key: OUTREACH_SENDER_COMPANY
+        value: SofIA
+      - key: NOMINATIM_CONTACT_EMAIL
+        sync: false
+    # Plan free: sin disco persistente. SQLite en /tmp se resetea al reiniciar.
+    # Para CRM permanente: plan pago + disk o DB externa (PostgreSQL, Turso, etc.).

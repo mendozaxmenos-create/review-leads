@@ -1,7 +1,12 @@
-# fly.toml app configuration file generated for review-leads on 2026-06-29T11:36:05-03:00
+# fly.toml — Review Leads en Fly.io
+# App: review-leads | Región: gru | URL: https://review-leads.fly.dev/
 #
+# IMPORTANTE SQLite/CRM:
+#   - Usar UNA sola máquina: fly scale count 1 -a review-leads
+#   - DATABASE_PATH=/tmp/review-leads.db (efímero; ver README para volumen /data)
+#
+# Deploy: fly deploy --depot=false -a review-leads
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
 
 app = 'review-leads'
 primary_region = 'gru'
