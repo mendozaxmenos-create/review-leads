@@ -197,6 +197,7 @@ async function openWhatsAppForLead(id) {
   }
 
   openWhatsAppWeb(id, body);
+  await markLeadContacted(id);
 }
 
 function whatsappHref(phone, message = "") {
@@ -584,13 +585,30 @@ function renderLeadPins() {
 
 async function updateLeadStatus(id, status) {
   const lead = leads.find((item) => leadId(item) === id);
-  if (!lead?.saved_lead_id) return;
+  if (!lead?.saved_lead_id) {
+    showError("Este lead no está guardado en el CRM. Generá una búsqueda primero.");
+    return;
+  }
   try {
     const updated = await apiPatch(`/api/history/leads/${lead.saved_lead_id}`, { status });
     lead.status = updated.status;
     lead.notes = updated.notes;
+    renderLeads();
   } catch (err) {
     showError(err.message);
+  }
+}
+
+async function markLeadContacted(id) {
+  const lead = leads.find((item) => leadId(item) === id);
+  if (!lead?.saved_lead_id || lead.status !== "new") return;
+  try {
+    const updated = await apiPatch(`/api/history/leads/${lead.saved_lead_id}`, { status: "contacted" });
+    lead.status = updated.status;
+    lead.notes = updated.notes;
+    renderLeads();
+  } catch {
+    /* no bloquear el envío si falla el CRM */
   }
 }
 
@@ -949,6 +967,7 @@ async function openMessageForLead(id, channel = "whatsapp") {
       ${data.tips ? `<div class="message-tips"><strong>Tip:</strong> ${escapeHtml(data.tips)}</div>` : ""}`;
     const title = channel === "email" ? `Email para ${found.lead.place_name}` : `WhatsApp para ${found.lead.place_name}`;
     showMessageModal(title, html, data, channel === "whatsapp" ? id : null);
+    await markLeadContacted(id);
   } catch (err) {
     showError(err.message);
   } finally {

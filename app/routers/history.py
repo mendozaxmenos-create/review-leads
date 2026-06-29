@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.db.store import get_store
 from app.models.lead_status import status_label, status_to_code
 from app.models.schemas import SavedLeadOut, SavedLeadUpdate, SearchHistoryItem, SearchResponse
+from app.services.cache import attach_saved_lead_meta
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
@@ -44,10 +45,13 @@ async def list_searches(limit: int = 30) -> list[SearchHistoryItem]:
 
 @router.get("/searches/{history_id}", response_model=SearchResponse)
 async def get_search(history_id: int) -> SearchResponse:
-    row = get_store().get_search_history(history_id)
+    store = get_store()
+    row = store.get_search_history(history_id)
     if not row:
         raise HTTPException(status_code=404, detail="Búsqueda no encontrada")
     response = row["response"]
+    place_ids = [lead.get("place_id", "") for lead in response.get("leads", []) if lead.get("place_id")]
+    attach_saved_lead_meta(response, store.get_saved_leads_by_places(place_ids))
     response["search_history_id"] = history_id
     return SearchResponse.model_validate(response)
 

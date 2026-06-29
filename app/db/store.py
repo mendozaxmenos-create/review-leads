@@ -291,8 +291,16 @@ class Store:
                 "SELECT id, place_id, status, notes, lead_json, updated_at FROM saved_leads WHERE id = ?",
                 (saved_lead_id,),
             ).fetchone()
-        result = dict(updated)
-        result["lead"] = json.loads(result.pop("lead_json"))
+            result = dict(updated)
+            lead_data = json.loads(result["lead_json"])
+            lead_data["status"] = result["status"]
+            lead_data["notes"] = result["notes"]
+            conn.execute(
+                "UPDATE saved_leads SET lead_json = ? WHERE id = ?",
+                (json.dumps(lead_data, ensure_ascii=False), saved_lead_id),
+            )
+        result.pop("lead_json", None)
+        result["lead"] = lead_data
         return result
 
     def get_saved_leads_by_places(self, place_ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -358,8 +366,10 @@ class Store:
             conditions.append("sl.status = ?")
             params.append(status)
         if project_id:
-            conditions.append("sh.project_id = ?")
-            params.append(project_id)
+            conditions.append(
+                "(sh.project_id = ? OR json_extract(sl.lead_json, '$.recommended_project_id') = ?)"
+            )
+            params.extend([project_id, project_id])
         if lead_fit:
             conditions.append("json_extract(sl.lead_json, '$.lead_fit') = ?")
             params.append(lead_fit)

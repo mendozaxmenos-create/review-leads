@@ -146,6 +146,10 @@ curl -X POST http://127.0.0.1:8000/api/search \
 
 Estados: `0` Pendiente → `1` Contacto → `2` Respondió → `3` Cerrado → `4` Descartado
 
+Al enviar WhatsApp o email desde la UI principal, el lead pasa automáticamente a **Contacto realizado** (`contacted`).
+
+**Importante (Fly.io):** el CRM usa SQLite. Con más de una máquina, cada una tiene su propia base en `/tmp` y los datos no se comparten. Mantené **1 sola máquina** (`fly scale count 1`) o usá un volumen persistente en `/data`.
+
 ## Servicios predefinidos
 
 `GET /api/projects` — IDs: `ai`, `booking-bot`, `crm`, `it-solutions`, `apps`, `cursor-dev`

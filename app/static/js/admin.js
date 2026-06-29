@@ -130,13 +130,18 @@ function filteredLeads() {
   });
 }
 
+function statCount(stats, code) {
+  const by = stats?.by_status_code || {};
+  return by[code] ?? by[String(code)] ?? 0;
+}
+
 function renderStats(stats) {
   const cards = [
     { code: null, label: "Total", count: stats.total, className: "stat-total" },
     ...statuses.map((s) => ({
       code: s.code,
       label: `${s.code} · ${s.label}`,
-      count: stats.by_status_code[s.code] || 0,
+      count: statCount(stats, s.code),
       className: `stat-step stat-step-${s.code}`,
       filter: s.value,
     })),
@@ -295,15 +300,31 @@ function renderTable() {
   els.leadsTbody.querySelectorAll(".admin-status-select").forEach((select) => {
     select.addEventListener("change", async (e) => {
       const id = Number(e.target.dataset.id);
+      const newStatus = e.target.value;
       try {
-        const updated = await apiPatch(`/api/history/leads/${id}`, { status: e.target.value });
+        const updated = await apiPatch(`/api/history/leads/${id}`, { status: newStatus });
         const idx = allLeads.findIndex((l) => l.id === id);
         if (idx >= 0) {
-          allLeads[idx] = { ...allLeads[idx], ...updated };
+          allLeads[idx] = {
+            ...allLeads[idx],
+            status: updated.status,
+            status_code: updated.status_code,
+            status_label: updated.status_label,
+            notes: updated.notes,
+            updated_at: updated.updated_at,
+            lead: updated.lead || allLeads[idx].lead,
+          };
         }
         const row = e.target.closest("tr");
         row.querySelector(".admin-code").textContent = updated.status_code;
-        await refreshStats();
+        const stats = await apiGet("/api/admin/stats");
+        renderStats(stats);
+        const filter = els.filterStatus.value;
+        if (filter && filter !== newStatus) {
+          await loadLeads();
+        } else {
+          renderTable();
+        }
       } catch (err) {
         showError(err.message);
       }
@@ -408,9 +429,20 @@ async function openWhatsApp(id) {
     cacheLeadMessage(item.lead.place_id, message);
     if (item.status === "new") {
       const updated = await apiPatch(`/api/history/leads/${id}`, { status: "contacted" });
-      Object.assign(item, updated);
+      const idx = allLeads.findIndex((l) => l.id === id);
+      if (idx >= 0) {
+        allLeads[idx] = {
+          ...allLeads[idx],
+          status: updated.status,
+          status_code: updated.status_code,
+          status_label: updated.status_label,
+          notes: updated.notes,
+          updated_at: updated.updated_at,
+        };
+      }
+      const stats = await apiGet("/api/admin/stats");
+      renderStats(stats);
       renderTable();
-      await refreshStats();
     }
   } catch (err) {
     showError(err.message);
