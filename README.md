@@ -201,17 +201,81 @@ Estados de lead: `new`, `contacted`, `responded`, `closed`, `discarded`.
 | `GET` | `/api/history/leads` | Listar leads guardados (`?status=contacted`) |
 | `PATCH` | `/api/history/leads/{id}` | Actualizar estado o notas |
 
-## Producción (Render)
+## Producción (Render — plan gratis)
 
-El repo incluye `Dockerfile` y `render.yaml` para desplegar en [Render](https://render.com):
+### Limitaciones del plan free ($0)
 
-1. Conectá el repo `schejtergustavo/review-leads` en Render → **New Blueprint**
-2. Agregá las variables secretas:
+| Qué | En free |
+|-----|---------|
+| Costo | $0, sin tarjeta (cuenta nueva) |
+| Búsquedas largas (1–3 min) | OK — timeout hasta ~100 min |
+| Primer acceso tras 15 min sin uso | ~1 min de “despertar” (cold start) |
+| Horas/mes | 750 h (alcanza para 1 app casi 24/7) |
+| **Historial / caché / servicios custom** | **Se pierden** al reiniciar o redeployar (sin disco persistente) |
+| Búsqueda + leads + WhatsApp | Funciona igual |
+
+La app en prod gratis sirve para **usar y probar**. El CRM local (historial, estados) es volátil hasta que pagues disco o uses DB externa.
+
+### Pasos para desplegar
+
+**1. Cuenta**
+
+- Entrá a [render.com](https://render.com) → **Get Started**
+- Registrate con **GitHub** (la misma cuenta del repo `schejtergustavo/review-leads`)
+
+**2. Crear el servicio**
+
+Opción A — **Blueprint** (recomendada):
+
+1. Dashboard → **New +** → **Blueprint**
+2. Conectá el repo `review-leads`
+3. Render lee `render.yaml` solo
+4. Te pedirá valores para:
    - `GOOGLE_PLACES_API_KEY`
    - `OPENAI_API_KEY`
-3. Render monta un disco en `/app/data` para SQLite (caché, historial, servicios custom)
+5. **Apply**
 
-Health check: `GET /health`
+Opción B — **Manual**:
+
+1. **New +** → **Web Service**
+2. Repo: `schejtergustavo/review-leads`, rama `main`
+3. **Language**: Docker
+4. **Instance type**: **Free**
+5. Variables de entorno (ver abajo)
+6. **Health Check Path**: `/health`
+7. **Create Web Service**
+
+**3. Variables de entorno** (Environment)
+
+| Variable | Valor |
+|----------|--------|
+| `GOOGLE_PLACES_API_KEY` | tu clave de Google |
+| `OPENAI_API_KEY` | tu clave de OpenAI |
+| `OPENAI_MODEL` | `gpt-4o-mini` |
+| `DEBUG` | `false` |
+| `DATABASE_PATH` | `/tmp/review-leads.db` |
+| `CACHE_TTL_HOURS` | `24` |
+
+**4. Esperar el deploy**
+
+- Primera build: 3–8 minutos
+- URL final: `https://review-leads-xxxx.onrender.com` (o el nombre que elijas)
+
+**5. Probar**
+
+- Abrí la URL → deberías ver la UI
+- Si estuvo dormida 15+ min, la primera carga tarda ~1 min (pantalla de Render “waking up”)
+- Hacé una búsqueda de prueba con pocos lugares (5–10)
+
+### Si el deploy falla
+
+- **Build error**: revisá **Logs** en el dashboard del servicio
+- **502 al buscar**: faltan API keys o están mal en Environment
+- **Blueprint pide disco / pago**: no agregues disk; usá el `render.yaml` del repo (sin bloque `disk`)
+
+### Mantener despierto (opcional, free)
+
+Render apaga el servicio tras **15 min sin tráfico**. Para portfolio/demo está bien. No hay forma oficial gratis de evitarlo sin un ping externo (ej. cron en otro servicio cada 14 min) — no es necesario para empezar.
 
 Alternativa manual con Docker:
 

@@ -14,10 +14,9 @@ services:
       - key: DEBUG
         value: "false"
       - key: DATABASE_PATH
-        value: /app/data/review-leads.db
+        value: /tmp/review-leads.db
       - key: CACHE_TTL_HOURS
         value: "24"
-    disk:
-      name: review-leads-data
-      mountPath: /app/data
-      sizeGB: 1
+    # Nota: plan free NO tiene disco persistente. SQLite vive en /tmp y se
+    # resetea al reiniciar o redeployar. Para historial/CRM permanente hace
+    # falta plan de pago + disk, o una DB externa.
