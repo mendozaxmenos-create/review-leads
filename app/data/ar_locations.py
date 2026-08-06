@@ -52,9 +52,60 @@ MENDOZA_DEPARTMENTS: list[LocationPreset] = [
     LocationPreset("men-tunuyan", "Mendoza · Tunuyán", -33.5833, -69.0167, 11, "department"),
     LocationPreset("men-tupungato", "Mendoza · Tupungato", -33.3667, -69.1500, 11, "department"),
     LocationPreset("men-san-rafael", "Mendoza · San Rafael", -34.6177, -68.3301, 11, "department"),
+    LocationPreset("men-malargue", "Mendoza · Malargüe", -35.4750, -69.5850, 11, "department"),
+    LocationPreset("men-potrerillos", "Mendoza · Potrerillos", -32.9667, -69.1833, 12, "city"),
+    LocationPreset("men-cacheuta", "Mendoza · Cacheuta", -33.0167, -69.1167, 13, "city"),
+    LocationPreset("men-uspallata", "Mendoza · Uspallata", -32.5931, -69.3469, 12, "city"),
+    LocationPreset("men-valle-uco", "Mendoza · Valle de Uco (centro)", -33.5500, -69.0500, 11, "city"),
 ]
 
+
+@dataclass(frozen=True)
+class CampaignZone:
+    """Zona para barridos de campaña (radio sugerido en km)."""
+
+    id: str
+    label: str
+    lat: float
+    lng: float
+    radius_km: float = 12.0
+    zoom: int = 11
+
+
+# Etapa 1 Villa Oliva / bot de reservas: cabañas en zonas turísticas de Mendoza.
+MENDOZA_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("men-potrerillos", "Potrerillos", -32.9667, -69.1833, 14, 12),
+    CampaignZone("men-cacheuta", "Cacheuta", -33.0167, -69.1167, 10, 13),
+    CampaignZone("men-uspallata", "Uspallata", -32.5931, -69.3469, 15, 12),
+    CampaignZone("men-lujan", "Luján de Cuyo / Chacras", -33.0333, -68.8833, 14, 12),
+    CampaignZone("men-chacras", "Chacras de Coria", -33.0167, -68.8833, 8, 13),
+    CampaignZone("men-maipu", "Maipú (ruta del vino)", -32.9667, -68.7667, 12, 12),
+    CampaignZone("men-valle-uco", "Valle de Uco (centro)", -33.5500, -69.0500, 18, 11),
+    CampaignZone("men-tunuyan", "Tunuyán", -33.5833, -69.0167, 14, 11),
+    CampaignZone("men-tupungato", "Tupungato", -33.3667, -69.1500, 14, 11),
+    CampaignZone("men-san-carlos", "San Carlos / La Consulta", -33.7667, -69.0333, 14, 11),
+    CampaignZone("men-vista-flores", "Vista Flores", -33.6500, -69.1500, 10, 12),
+    CampaignZone("men-san-rafael", "San Rafael", -34.6177, -68.3301, 16, 11),
+    CampaignZone("men-valle-grande", "Valle Grande (San Rafael)", -34.7333, -68.1167, 14, 11),
+    CampaignZone("men-los-reyunos", "Los Reyunos", -34.5833, -68.6167, 12, 12),
+    CampaignZone("men-malargue", "Malargüe", -35.4750, -69.5850, 16, 11),
+    CampaignZone("men-las-lenas", "Las Leñas", -35.1467, -70.0817, 12, 12),
+    CampaignZone("men-los-molles", "Los Molles", -35.2000, -69.9333, 10, 12),
+]
+
+# Mantener presets de mapa alineados con zonas nuevas de campaña.
+_EXTRA_MENDOZA_PRESETS = [
+    LocationPreset(z.id, f"Mendoza · {z.label}", z.lat, z.lng, z.zoom, "city")
+    for z in MENDOZA_CABANAS_ZONES
+    if z.id not in {p.id for p in MENDOZA_DEPARTMENTS}
+]
+MENDOZA_DEPARTMENTS = list(MENDOZA_DEPARTMENTS) + _EXTRA_MENDOZA_PRESETS
+
 ALL_PRESETS: list[LocationPreset] = AR_PROVINCES + MENDOZA_DEPARTMENTS
+
+
+def list_mendoza_cabanas_zones() -> list[CampaignZone]:
+    return list(MENDOZA_CABANAS_ZONES)
 
 
 def match_presets(query: str, *, limit: int = 8) -> list[LocationPreset]:

@@ -1,18 +1,23 @@
 :root {
-  --bg: #0f1419;
-  --surface: #1a2332;
-  --surface-2: #243044;
-  --border: #2d3a4f;
-  --text: #e8edf4;
-  --muted: #8b9cb3;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --high: #22c55e;
-  --medium: #f59e0b;
-  --low: #94a3b8;
-  --danger: #ef4444;
-  --radius: 12px;
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --bg: #0c1210;
+  --bg-glow: #143028;
+  --surface: #121a17;
+  --surface-2: #1a2621;
+  --border: #2a3b34;
+  --text: #eef4f0;
+  --muted: #8fa399;
+  --accent: #2dd4a0;
+  --accent-hover: #22b88a;
+  --accent-soft: rgba(45, 212, 160, 0.14);
+  --high: #3ddc97;
+  --medium: #e8b84a;
+  --low: #7d8f86;
+  --danger: #f07167;
+  --brand: #f3efe6;
+  --radius: 14px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
 }
 
 * {
@@ -21,16 +26,42 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  background: var(--bg);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, var(--bg-glow), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #1a2030, transparent 50%),
+    var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
 
 header {
-  padding: 1.25rem 1.5rem;
+  padding: 1.5rem 1.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #151d2b 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, rgba(20, 48, 40, 0.45) 0%, transparent 100%);
+}
+
+.brand-block .brand-mark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--brand);
+  letter-spacing: 0.02em;
+}
+
+.brand-block h1 {
+  margin: 0.35rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.brand-tagline {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 36rem;
 }
 
 header h1 {
@@ -54,15 +85,15 @@ header p {
 
 .layout {
   display: grid;
-  grid-template-columns: 380px 1fr;
-  min-height: calc(100vh - 76px);
+  grid-template-columns: 360px 1fr;
+  min-height: calc(100vh - 110px);
 }
 
 .sidebar {
   padding: 1.25rem;
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  background: var(--surface);
+  background: rgba(18, 26, 23, 0.92);
 }
 
 .panel {
@@ -75,10 +106,41 @@ header p {
 
 .panel h2 {
   margin: 0 0 0.85rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--muted);
+}
+
+.settings-panel summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+  list-style: none;
+}
+
+.settings-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-body {
+  margin-top: 0.85rem;
+}
+
+.btn-search {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.map-compact #map,
+.map-compact.map-wrap {
+  height: 160px;
 }
 
 label {
@@ -1206,6 +1268,106 @@ input[type="range"] {
 
 .muted {
   color: var(--muted);
+}
+
+/* SofIA lead grouping & cards */
+.service-group {
+  margin-bottom: 1.75rem;
+}
+
+.service-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.service-group-header h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 400;
+  color: var(--brand);
+}
+
+.service-group-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.service-group-leads {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.lead-card {
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(135deg, rgba(45, 212, 160, 0.05), transparent 40%), var(--surface-2);
+}
+
+.lead-card .pain-line {
+  margin: 0.5rem 0 0;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.lead-card .sofia-help {
+  margin: 0.45rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(45, 212, 160, 0.25);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.lead-card .sofia-help strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.lead-actions .btn-whatsapp-primary {
+  background: var(--accent);
+  color: #06261c;
+  border: none;
+  font-weight: 600;
+}
+
+.lead-actions .btn-whatsapp-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.chip[data-service].active,
+#service-filters .chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.empty-hero {
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  max-width: 28rem;
+  margin: 2rem auto;
+}
+
+.empty-hero h2 {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 400;
+  margin: 0 0 0.75rem;
+  color: var(--brand);
+}
+
+.empty-hero p {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
 }
 
 @media (max-width: 960px) {

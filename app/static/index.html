@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Review Leads</title>
+    <title>SofIA Leads</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -15,12 +21,15 @@
   <body>
     <header>
       <div class="header-row">
-        <div>
-          <h1>Review Leads</h1>
-          <p>Encontrá clientes potenciales según reseñas de Google en tu zona</p>
+        <div class="brand-block">
+          <p class="brand-mark">SofIA</p>
+          <h1>Leads por dolor</h1>
+          <p class="brand-tagline">
+            Reseñas de Google → oportunidad → servicio SofIA → WhatsApp
+          </p>
         </div>
         <div class="header-actions">
-          <a href="/admin" class="btn btn-secondary btn-sm">Panel CRM</a>
+          <a href="/admin" class="btn btn-secondary btn-sm">CRM</a>
           <button type="button" class="btn btn-secondary btn-sm" id="history-btn">Historial</button>
         </div>
       </div>
@@ -28,74 +37,93 @@
 
     <div class="layout">
       <aside class="sidebar">
-        <section class="panel">
-          <h2>Zona de búsqueda</h2>
-          <label for="address-search">Buscar ciudad, departamento o dirección</label>
+        <section class="panel zone-panel">
+          <h2>Zona</h2>
+          <label for="address-search">Ciudad o dirección</label>
           <div class="geocode-wrap">
             <div class="row-2">
               <input
                 type="text"
                 id="address-search"
-                placeholder="Ej: Mendoza, Godoy Cruz, Palermo…"
+                placeholder="Ej: Mendoza, Godoy Cruz…"
                 autocomplete="off"
               />
-              <button type="button" class="btn btn-secondary btn-sm" id="geocode-btn">
-                Ir
-              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="geocode-btn">Ir</button>
             </div>
             <ul id="geocode-suggestions" class="geocode-suggestions" hidden></ul>
           </div>
 
-          <label for="location-preset">Ubicación rápida (Argentina)</label>
+          <label for="location-preset">Ubicación rápida</label>
           <select id="location-preset">
-            <option value="">— Elegir provincia o zona —</option>
+            <option value="">— Elegir zona —</option>
           </select>
-          <div class="map-wrap">
+
+          <div class="map-wrap map-compact">
             <div id="map"></div>
           </div>
-          <p class="map-hint">Hacé clic en el mapa o arrastrá el marcador para elegir el centro.</p>
-
-          <label for="radius">Radio de búsqueda</label>
-          <input type="range" id="radius" min="0.5" max="15" step="0.5" value="2" />
-          <div class="range-value" id="radius-value">2 km</div>
+          <p class="map-hint">Clic o arrastrá el marcador. Radio fijo 8 km (ajustable abajo).</p>
         </section>
 
         <section class="panel">
-          <h2>Motor de prospección</h2>
+          <h2>Servicios SofIA</h2>
           <p class="discovery-intro" id="discovery-intro">
-            Buscamos en <strong>todos los rubros</strong> de la zona y la IA detecta qué solución
-            con Cursor encaja en cada negocio.
+            Escaneamos comercios de la zona, leemos quejas en Google y recomendamos
+            <strong>qué servicio SofIA vender</strong>.
           </p>
           <ul class="service-catalog" id="service-catalog"></ul>
-
-          <label for="max-places">Cantidad máxima de lugares a escanear</label>
-          <input type="number" id="max-places" min="8" max="60" value="24" />
-          <p class="map-hint">Más lugares = más leads pero más tiempo y costo de APIs.</p>
         </section>
 
-        <section class="panel">
-          <h2>Filtros de calidad</h2>
-          <label class="checkbox-row">
-            <input type="checkbox" id="filter-negative-reviews" checked />
-            Solo reseñas ≤ 3 estrellas
-          </label>
-          <label for="max-reviews-per-place">Máx. reseñas por negocio (IA)</label>
-          <input type="number" id="max-reviews-per-place" min="1" max="20" value="5" />
-          <label for="max-place-rating">Rating máx. del negocio (opcional)</label>
-          <input
-            type="number"
-            id="max-place-rating"
-            min="1"
-            max="5"
-            step="0.1"
-            placeholder="Ej: 4.0 — vacío = todos"
-          />
-          <p class="map-hint">Prioriza reseñas peores y reduce costo de OpenAI.</p>
-          <label class="checkbox-row">
-            <input type="checkbox" id="use-cache" checked />
-            Usar caché (24 h)
-          </label>
-        </section>
+        <button type="button" class="btn btn-primary btn-search" id="search-btn">
+          Buscar leads
+        </button>
+        <button type="button" class="btn btn-secondary btn-search" id="mendoza-cabanas-btn">
+          Mendoza · cabañas (todas las zonas)
+        </button>
+        <p class="map-hint campaign-hint">
+          Etapa Villa Oliva: barre zonas turísticas de Mendoza (cabañas/complejos) y guarda contactos en el CRM.
+        </p>
+
+        <details class="panel settings-panel">
+          <summary>Ajustes</summary>
+          <div class="settings-body">
+            <label for="radius">Radio (km)</label>
+            <input type="range" id="radius" min="0.5" max="15" step="0.5" value="8" />
+            <div class="range-value" id="radius-value">8 km</div>
+
+            <label for="max-places">Máx. lugares a escanear</label>
+            <input type="number" id="max-places" min="8" max="60" value="36" />
+
+            <label class="checkbox-row">
+              <input type="checkbox" id="filter-negative-reviews" checked />
+              Solo reseñas ≤ 3 estrellas
+            </label>
+
+            <label for="max-reviews-per-place">Máx. reseñas por negocio (IA)</label>
+            <input type="number" id="max-reviews-per-place" min="1" max="20" value="5" />
+
+            <label for="max-place-rating">Rating máx. del negocio (opcional)</label>
+            <input
+              type="number"
+              id="max-place-rating"
+              min="1"
+              max="5"
+              step="0.1"
+              placeholder="Vacío = todos"
+            />
+
+            <label class="checkbox-row">
+              <input type="checkbox" id="use-cache" checked />
+              Usar caché (24 h)
+            </label>
+
+            <!-- Hidden legacy fields kept for JS compatibility -->
+            <input type="hidden" id="search-mode" value="leads" />
+            <input type="hidden" id="search-focus" value="all" />
+            <select id="business-type" hidden>
+              <option value="">all</option>
+            </select>
+          </div>
+        </details>
 
         <section class="panel" id="custom-project-panel" hidden>
           <h2>Servicio propio</h2>
@@ -108,14 +136,10 @@
           <label for="custom-types">Tipos de negocio sugeridos (coma)</label>
           <input type="text" id="custom-types" placeholder="restaurant, store, gym" />
           <div class="row-2">
-            <button type="button" class="btn btn-secondary btn-sm" id="save-custom-btn">Guardar servicio</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="save-custom-btn">Guardar</button>
             <button type="button" class="btn btn-secondary btn-sm" id="delete-custom-btn" hidden>Eliminar</button>
           </div>
         </section>
-
-        <button type="button" class="btn btn-primary" id="search-btn">
-          Generar leads
-        </button>
       </aside>
 
       <main class="main">
@@ -123,31 +147,24 @@
           <div class="toolbar-left">
             <div class="stats">
               <span class="stat">Lugares: <strong id="stat-places">0</strong></span>
-              <span class="stat">Reseñas IA: <strong id="stat-reviews">0</strong></span>
+              <span class="stat">Reseñas: <strong id="stat-reviews">0</strong></span>
               <span class="stat">Leads: <strong id="stat-leads">0</strong></span>
+              <span class="stat">High: <strong id="stat-high">0</strong></span>
               <span class="stat">Seleccionados: <strong id="stat-selected">0</strong></span>
             </div>
+            <div class="filter-chips" id="service-filters" aria-label="Filtrar por servicio SofIA"></div>
             <div class="filter-chips" id="fit-filters">
-              <button type="button" class="chip active" data-filter="all">Todos</button>
+              <button type="button" class="chip active" data-filter="all">Prioridad: todas</button>
               <button type="button" class="chip" data-filter="high">High</button>
               <button type="button" class="chip" data-filter="medium">Medium</button>
-              <button type="button" class="chip" data-filter="low">Low</button>
             </div>
             <div class="filter-chips rubro-filters" id="rubro-filters" hidden></div>
           </div>
           <div class="actions-row">
-            <button type="button" class="btn btn-secondary btn-sm" id="select-all">
-              Seleccionar visibles
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="clear-selection">
-              Limpiar
-            </button>
-            <button type="button" class="btn btn-primary btn-sm" id="export-btn" disabled>
-              Exportar CSV
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="messages-btn" disabled>
-              Mensajes seleccionados
-            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="select-all">Seleccionar visibles</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="clear-selection">Limpiar</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="export-btn" disabled>CSV</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="messages-btn" disabled>Mensajes</button>
             <select id="bulk-channel" class="bulk-channel">
               <option value="whatsapp">WhatsApp</option>
               <option value="email">Email</option>
@@ -156,7 +173,6 @@
         </div>
 
         <div class="error-banner" id="error" role="alert"></div>
-
         <div class="summary-box" id="summary" hidden></div>
         <div class="results" id="results"></div>
         <div class="suggestions-box" id="suggestions" hidden></div>
@@ -165,7 +181,7 @@
 
     <div class="loading-overlay" id="loading" aria-live="polite">
       <div class="spinner"></div>
-      <p id="loading-text">Buscando y clasificando reseñas… puede tardar un minuto.</p>
+      <p id="loading-text">Buscando dolores y matching SofIA…</p>
     </div>
 
     <div class="modal" id="message-modal" hidden>
@@ -181,9 +197,7 @@
           <a class="btn btn-primary btn-sm" id="whatsapp-open-btn" href="#" target="_blank" rel="noopener" hidden>
             Abrir WhatsApp
           </a>
-          <a class="btn btn-primary btn-sm" id="email-open-btn" href="#" hidden>
-            Abrir email
-          </a>
+          <a class="btn btn-primary btn-sm" id="email-open-btn" href="#" hidden>Abrir email</a>
         </div>
       </div>
     </div>
@@ -193,8 +207,8 @@
       <div class="drawer-panel history-panel">
         <div class="drawer-header">
           <div>
-            <h2>Historial de búsquedas</h2>
-            <p>Búsquedas guardadas localmente</p>
+            <h2>Historial</h2>
+            <p>Búsquedas guardadas</p>
           </div>
           <button type="button" class="icon-btn" data-close-history aria-label="Cerrar">✕</button>
         </div>
@@ -217,7 +231,7 @@
         <div class="chat-compose">
           <input type="text" id="chat-input" placeholder="Escribí como si fueras el cliente…" />
           <button type="button" class="btn btn-primary btn-sm" id="chat-send-btn">Enviar</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="chat-start-btn">Iniciar conversación</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="chat-start-btn">Iniciar</button>
         </div>
         <p class="bot-hint" id="bot-next-action"></p>
       </div>

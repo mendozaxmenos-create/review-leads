@@ -61,7 +61,15 @@ class SearchRequest(BaseModel):
     radius_km: float = Field(..., gt=0, le=50, description="Radio de búsqueda en kilómetros")
     business_type: str | None = Field(
         default=None,
-        description="Opcional: limitar a un rubro. null = buscar en todos los rubros",
+        description="Opcional: limitar a un rubro Google. null = según search_focus",
+    )
+    search_focus: str | None = Field(
+        default="all",
+        description="Foco de prospección: all | lodging (cabañas, complejos, hoteles)",
+    )
+    mode: str = Field(
+        default="leads",
+        description="leads = clasificar por reseñas | directory = listar negocios del rubro (sin filtrar por quejas)",
     )
     max_places: int = Field(default=24, ge=1, le=60)
     project_id: str | None = Field(
@@ -152,6 +160,56 @@ class RubroSummary(BaseModel):
     leads_count: int
 
 
+class CampaignZoneOut(BaseModel):
+    id: str
+    label: str
+    lat: float
+    lng: float
+    radius_km: float
+    zoom: int = 11
+
+
+class MendozaCabanasCampaignRequest(BaseModel):
+    """Barrido de cabañas en zonas turísticas de Mendoza (etapa Villa Oliva)."""
+
+    mode: str = Field(
+        default="directory",
+        description="directory = listar contactos rápido | leads = clasificar reseñas con IA",
+    )
+    max_places_per_zone: int = Field(default=40, ge=8, le=60)
+    use_cache: bool = True
+    zone_ids: list[str] | None = Field(
+        default=None,
+        description="Opcional: subset de zonas. null = todas las zonas turísticas",
+    )
+    max_review_rating: int | None = Field(default=3, ge=1, le=5)
+    max_reviews_per_place: int = Field(default=5, ge=1, le=20)
+
+
+class CampaignZoneResult(BaseModel):
+    zone_id: str
+    zone_label: str
+    places_scanned: int
+    leads_count: int
+    with_phone: int = 0
+    error: str | None = None
+    search_history_id: int | None = None
+
+
+class MendozaCabanasCampaignResponse(BaseModel):
+    campaign: str = "mendoza-cabanas"
+    mode: str
+    zones_total: int
+    zones_ok: int
+    places_scanned: int
+    leads_unique: int
+    with_phone: int
+    zones: list[CampaignZoneResult]
+    leads: list[ReviewLead]
+    summary: str
+    search_history_id: int | None = None
+
+
 class SearchResponse(BaseModel):
     center: GeoPoint
     radius_km: float
@@ -159,6 +217,7 @@ class SearchResponse(BaseModel):
     project_id: str | None = None
     project_name: str | None = "Detección automática"
     discovery_mode: bool = True
+    mode: str = "leads"
     places_scanned: int
     reviews_fetched: int = 0
     reviews_classified: int = 0

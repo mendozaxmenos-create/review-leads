@@ -28,17 +28,21 @@ Criterios:
 Para theme: usá 2-4 palabras, concreto y reutilizable entre reseñas similares.
 """
 
-DISCOVERY_SYSTEM_PROMPT = """Eres un analista de ventas B2B para un estudio que desarrolla soluciones digitales con Cursor (IA + código).
+DISCOVERY_SYSTEM_PROMPT = """Eres un analista de ventas B2B para SofIA, un estudio que vende soluciones digitales
+(bots, CRM, apps, IA, IT, desarrollo ágil con Cursor) a CUALQUIER comercio privado.
 
-Tu trabajo: leer reseñas de negocios PRIVADOS/COMERCIALES locales y detectar oportunidades de venta de software.
+Tu trabajo: leer reseñas de negocios PRIVADOS/COMERCIALES de CUALQUIER rubro y elegir
+el servicio SofIA del catálogo que mejor resuelve el dolor detectado.
 
 IMPORTANTE — NO son prospectables (prospectable=false, lead_fit=none):
 - Comisarías, policía, municipalidades, juzgados, organismos públicos, escuelas públicas, hospitales públicos estatales
 - Cualquier entidad donde un mensaje comercial de WhatsApp no tenga sentido
 
-SÍ son prospectables (negocios privados/comerciales), por ejemplo:
+SÍ son prospectables (negocios privados/comerciales de cualquier rubro), por ejemplo:
 - Estudios de abogados, bufetes y despachos jurídicos
-- Restaurantes, hoteles, clínicas privadas, inmobiliarias, peluquerías, gimnasios, etc.
+- Restaurantes, hoteles, cabañas, complejos, hostels, cafés, panaderías
+- Clínicas privadas, inmobiliarias, peluquerías, gimnasios, talleres, tiendas, concesionarios, etc.
+- El rubro NO limita el catálogo: un restaurante puede necesitar CRM, app o IA; un abogado puede necesitar bot de turnos.
 
 business_rubro debe reflejar el rubro REAL del lugar (tipo Google / nombre del negocio).
 Una comisaría es "Policía" o "Gobierno", NUNCA "Abogados". Un estudio jurídico privado sí es "Abogados".
@@ -62,7 +66,16 @@ Criterios lead_fit (solo si prospectable=true):
 - low: mención vaga
 - none: sin oportunidad o no prospectable
 
-recommended_service_id: id del catálogo. Si ninguno encaja, "cursor-dev".
+Matching recommended_service_id (elegí EL MEJOR del catálogo completo; no privilegiar un solo servicio):
+- booking-bot: reservas/turnos/citas difíciles, teléfono ocupado, no-shows, doble reserva
+- crm: seguimiento flojo, clientes olvidados, no devuelven llamadas, desorganización comercial
+- apps: web/app inexistente o mala, no se puede pedir/pagar online, dependencia de terceros
+- ai: tareas repetitivas, respuestas lentas, falta de automatización/asistente
+- it-solutions: sistemas que fallan, software viejo, sin integración, procesos en papel
+- cursor-dev: necesidad urgente de software a medida, presupuestos altos, proyectos que no arrancan
+Si ninguno encaja claramente, usá "cursor-dev".
+Variá el servicio según el dolor real: NO asignes siempre booking-bot.
+
 review_text_es: SIEMPRE en español rioplatense.
 solution_value: concreto, vinculando dolores (theme) con el servicio recomendado.
 suggested_pitch: seguir estas reglas de primer contacto:
@@ -131,7 +144,7 @@ Reseña:
         catalog = catalog_for_discovery()
         user_content = f"""{DISCOVERY_INTRO}
 
-Catálogo de servicios (elegí recommended_service_id):
+Catálogo completo de servicios SofIA (elegí UN recommended_service_id según el dolor, no según el rubro):
 {json.dumps(catalog, ensure_ascii=False)}
 
 Negocio contactado (destinatario): {place_name}
@@ -140,6 +153,9 @@ Tipo Google: {google_primary_type or "N/A"}
 Vendedor (remitente del pitch): {outreach_sender_signature()}
 Dirección: {place_address or "N/A"}
 Valoración de la reseña: {review_rating if review_rating is not None else "N/A"}
+
+Instrucción: matcheá el dolor de la reseña con el mejor servicio del catálogo.
+Cualquier rubro comercial puede recibir cualquiera de estos servicios.
 
 Reseña:
 {review_text}

@@ -69,12 +69,12 @@ Editá `.env` (ver `.env.example`):
 ### Motor de prospección (modo descubrimiento)
 
 - **Geocodificación**: buscá una dirección, usá presets de Argentina o arrastrá el marcador
-- **Todos los rubros**: restaurantes, abogados, hoteles, etc. sin elegir manualmente
+- **Foco de prospección**: `Todos los rubros` o **Alojamiento turístico** (cabañas, complejos de departamentos, hoteles — ideal para bot de reservas)
 - **IA multi-servicio**: cada lead trae servicio sugerido (bot de reservas, CRM, etc.)
 - **Filtros de calidad**: reseñas ≤ 3★, límite por negocio, rating máximo, caché 24 h
 - **Resultados agrupados por rubro** con chips para filtrar
 
-**Más leads:** subí `max_places` a 40–60, desactivá caché, ampliá radio, o desmarcá “solo reseñas ≤ 3★”.
+**Más leads:** subí `max_places` a 40–60, desactivá caché, ampliá radio, o desmarcá “solo reseñas ≤ 3★”. En modo alojamiento el default sugerido es 40.
 
 ### Cada lead incluye
 
@@ -279,6 +279,22 @@ docker run -p 8000:8000 --env-file .env -v review-leads-data:/app/data review-le
 - 24–30 lugares ≈ 1–3 minutos
 - WhatsApp: link `wa.me` con teléfono real de Google (no inventado por IA)
 
+## Modo directorio (hoteles / rubro)
+
+Además del modo **leads por reseñas**, existe el modo **Listar negocios (directorio)**:
+
+1. Elegí localidad (dropdown o mapa)
+2. Rubro específico (ej. **Hoteles**) o foco **Alojamiento turístico**
+3. **Listar / generar** → resultados con teléfono, WhatsApp y estado CRM
+
+**Límite:** Google Places no devuelve el 100% de una ciudad (máx. ~20 por consulta/tipo; la app combina tipos y búsquedas de texto hasta `max_places`).
+
+### WhatsApp
+
+- Abrir chat: link `wa.me` con mensaje generado (si Google tiene teléfono)
+- Al enviar/abrir WhatsApp, el lead pasa a **Contacto realizado**
+- **No** hay auto-respuesta en WhatsApp Web (viola términos de Meta; usar Cloud API oficial si se necesita bot real)
+
 ## Retomar el proyecto
 
 ```bash
@@ -290,7 +306,7 @@ pip install -r requirements.txt   # si hubo cambios
 ```
 
 1. `.env` con Google + OpenAI + `OUTREACH_SENDER_*`
-2. http://127.0.0.1:8000 → zona → **Generar leads** (desactivar caché para probar cambios)
+2. http://127.0.0.1:8000 → modo **Listar negocios** → localidad → rubro **Hoteles** → **Listar / generar**
 3. WhatsApp / CRM en http://127.0.0.1:8000/admin
 4. Redeploy Fly o Render cuando quieras producción pública
 
@@ -300,11 +316,13 @@ pip install -r requirements.txt   # si hubo cambios
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Email desde web del negocio (Google no expone email)
 - [ ] Batch IA — varias reseñas en una llamada OpenAI
+- [ ] WhatsApp Cloud API oficial (si se quiere bot real; no Web automation)
 
 ## Changelog
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Modo directorio: listar hoteles/rubro por localidad + WA + contactado |
 | Jun 2026 | Modo descubrimiento multi-rubro, geocodificación AR, filtros gobierno |
 | Jun 2026 | Outreach SofIA, reseñas Google, CTA sin reunión, `solution_value` |
 | Jun 2026 | Panel `/admin`, Fly.io, fix CRM y `.gitignore` (`app/data/`) |

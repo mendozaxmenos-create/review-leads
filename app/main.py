@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.db.store import get_store
-from app.routers import admin, geocode, history, outreach, projects, search
+from app.routers import admin, campaigns, geocode, history, outreach, projects, search
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -37,6 +37,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(projects.router)
 app.include_router(search.router)
+app.include_router(campaigns.router)
 app.include_router(outreach.router)
 app.include_router(history.router)
 app.include_router(admin.router)

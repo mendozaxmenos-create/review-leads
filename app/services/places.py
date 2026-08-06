@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
-from app.data.business_types import all_searchable_types
+from app.data.business_types import all_searchable_types, resolve_search_focus
 
 PLACES_BASE = "https://places.googleapis.com/v1"
 FIELD_MASK_SEARCH = (
@@ -61,6 +61,41 @@ class PlacesService:
 
         return data.get("places", [])
 
+    async def search_text(
+        self,
+        *,
+        query: str,
+        lat: float,
+        lng: float,
+        radius_km: float,
+        max_results: int,
+        included_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        radius_m = int(radius_km * 1000)
+        body: dict[str, Any] = {
+            "textQuery": query,
+            "maxResultCount": min(max_results, 20),
+            "locationBias": {
+                "circle": {
+                    "center": {"latitude": lat, "longitude": lng},
+                    "radius": float(radius_m),
+                }
+            },
+        }
+        if included_type:
+            body["includedType"] = included_type
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{PLACES_BASE}/places:searchText",
+                headers=self._headers(FIELD_MASK_SEARCH),
+                json=body,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        return data.get("places", [])
+
     async def search_discovery(
         self,
         lat: float,
@@ -68,9 +103,21 @@ class PlacesService:
         radius_km: float,
         max_results: int,
         business_types: list[str] | None = None,
+        search_focus: str | None = None,
     ) -> list[dict[str, Any]]:
-        types = business_types or all_searchable_types()
-        per_type = max(2, min(4, max_results // max(len(types), 1) + 1))
+        focus = resolve_search_focus(search_focus)
+        if business_types:
+            types = business_types
+            text_queries: list[str] = []
+        elif focus["google_types"] is not None:
+            types = list(focus["google_types"])
+            text_queries = list(focus.get("text_queries") or [])
+        else:
+            types = all_searchable_types()
+            text_queries = []
+
+        type_budget = max(2, min(20, max_results if len(types) <= 2 else max_results // max(len(types), 1) + 2))
+        text_budget = max(6, min(20, max_results // max(len(text_queries), 1) + 2)) if text_queries else 0
         semaphore = asyncio.Semaphore(5)
 
         async def fetch_type(business_type: str) -> list[dict[str, Any]]:
@@ -81,7 +128,7 @@ class PlacesService:
                         lng=lng,
                         radius_km=radius_km,
                         business_type=business_type,
-                        max_results=per_type,
+                        max_results=type_budget,
                     )
                 except Exception:
                     return []
@@ -93,7 +140,41 @@ class PlacesService:
                     for place in places
                 ]
 
-        batches = await asyncio.gather(*(fetch_type(bt) for bt in types))
+        async def fetch_text(query: str) -> list[dict[str, Any]]:
+            async with semaphore:
+                try:
+                    places = await self.search_text(
+                        query=query,
+                        lat=lat,
+                        lng=lng,
+                        radius_km=radius_km,
+                        max_results=text_budget,
+                        included_type="lodging" if search_focus in ("lodging", "cabanas") else None,
+                    )
+                except Exception:
+                    # Algunos tipos/queries fallan; reintentar sin includedType.
+                    try:
+                        places = await self.search_text(
+                            query=query,
+                            lat=lat,
+                            lng=lng,
+                            radius_km=radius_km,
+                            max_results=text_budget,
+                        )
+                    except Exception:
+                        return []
+                return [
+                    {
+                        "place": place,
+                        "business_type": place.get("primaryType") or "lodging",
+                    }
+                    for place in places
+                ]
+
+        batches = await asyncio.gather(
+            *(fetch_type(bt) for bt in types),
+            *(fetch_text(q) for q in text_queries),
+        )
         seen: dict[str, dict[str, Any]] = {}
         for batch in batches:
             for item in batch:

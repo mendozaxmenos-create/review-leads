@@ -15,6 +15,10 @@ const BUSINESS_TYPES = [
   { value: "car_dealer", label: "Concesionarios" },
   { value: "doctor", label: "Médicos" },
   { value: "insurance_agency", label: "Seguros" },
+  { value: "lodging", label: "Alojamiento" },
+  { value: "hotel", label: "Hoteles" },
+  { value: "cottage", label: "Cabañas" },
+  { value: "guest_house", label: "Casas de huéspedes" },
 ];
 
 const LEAD_STATUSES = [
@@ -35,6 +39,7 @@ let leads = [];
 let rubroSummary = [];
 let selectedIds = new Set();
 let activeFilter = "all";
+let activeServiceFilter = "all";
 let activeRubroFilter = "all";
 let hasSearched = false;
 let activeLeadForBot = null;
@@ -49,11 +54,16 @@ let geocodeDebounce = null;
 
 const els = {
   serviceCatalog: document.getElementById("service-catalog"),
+  serviceFilters: document.getElementById("service-filters"),
   rubroFilters: document.getElementById("rubro-filters"),
   fitFilters: document.getElementById("fit-filters"),
   radius: document.getElementById("radius"),
   radiusValue: document.getElementById("radius-value"),
   maxPlaces: document.getElementById("max-places"),
+  searchMode: document.getElementById("search-mode"),
+  searchFocus: document.getElementById("search-focus"),
+  businessType: document.getElementById("business-type"),
+  discoveryIntro: document.getElementById("discovery-intro"),
   filterNegativeReviews: document.getElementById("filter-negative-reviews"),
   maxReviewsPerPlace: document.getElementById("max-reviews-per-place"),
   maxPlaceRating: document.getElementById("max-place-rating"),
@@ -72,6 +82,7 @@ const els = {
   geocodeSuggestions: document.getElementById("geocode-suggestions"),
   locationPreset: document.getElementById("location-preset"),
   searchBtn: document.getElementById("search-btn"),
+  mendozaCabanasBtn: document.getElementById("mendoza-cabanas-btn"),
   results: document.getElementById("results"),
   summary: document.getElementById("summary"),
   suggestions: document.getElementById("suggestions"),
@@ -81,6 +92,7 @@ const els = {
   statPlaces: document.getElementById("stat-places"),
   statReviews: document.getElementById("stat-reviews"),
   statLeads: document.getElementById("stat-leads"),
+  statHigh: document.getElementById("stat-high"),
   statSelected: document.getElementById("stat-selected"),
   selectAll: document.getElementById("select-all"),
   exportBtn: document.getElementById("export-btn"),
@@ -95,11 +107,11 @@ const els = {
   botTitle: document.getElementById("bot-title"),
   botSubtitle: document.getElementById("bot-subtitle"),
   botStage: document.getElementById("bot-stage"),
+  botNextAction: document.getElementById("bot-next-action"),
   chatLog: document.getElementById("chat-log"),
   chatInput: document.getElementById("chat-input"),
   chatSendBtn: document.getElementById("chat-send-btn"),
   chatStartBtn: document.getElementById("chat-start-btn"),
-  botNextAction: document.getElementById("bot-next-action"),
 };
 
 function leadId(lead) {
@@ -310,16 +322,17 @@ function initMap() {
 }
 
 function updateCircle() {
-  const radiusM = Number(els.radius.value) * 1000;
-  els.radiusValue.textContent = `${els.radius.value} km`;
+  const km = Number(els.radius?.value) || 8;
+  const radiusM = km * 1000;
+  if (els.radiusValue) els.radiusValue.textContent = `${km} km`;
   if (circle) {
     circle.setLatLng([center.lat, center.lng]);
     circle.setRadius(radiusM);
   } else {
     circle = L.circle([center.lat, center.lng], {
       radius: radiusM,
-      color: "#3b82f6",
-      fillColor: "#3b82f6",
+      color: "#2dd4a0",
+      fillColor: "#2dd4a0",
       fillOpacity: 0.12,
       weight: 2,
     }).addTo(map);
@@ -411,6 +424,33 @@ async function loadServiceCatalog() {
         `<li><strong>${escapeHtml(p.name)}</strong><span>${escapeHtml(p.description.slice(0, 90))}${p.description.length > 90 ? "…" : ""}</span></li>`
     )
     .join("");
+  renderServiceFilters();
+}
+
+function renderServiceFilters() {
+  if (!els.serviceFilters) return;
+  const counts = {};
+  for (const lead of leads) {
+    const id = lead.recommended_project_id || "other";
+    counts[id] = (counts[id] || 0) + 1;
+  }
+  const chips = [
+    `<button type="button" class="chip ${activeServiceFilter === "all" ? "active" : ""}" data-service="all">Todos los servicios</button>`,
+    ...projects.map((p) => {
+      const n = counts[p.id] || 0;
+      const label = n > 0 ? `${escapeHtml(p.name)} (${n})` : escapeHtml(p.name);
+      return `<button type="button" class="chip ${activeServiceFilter === p.id ? "active" : ""}" data-service="${escapeHtml(p.id)}">${label}</button>`;
+    }),
+  ];
+  els.serviceFilters.innerHTML = chips.join("");
+  els.serviceFilters.querySelectorAll("[data-service]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      activeServiceFilter = chip.dataset.service;
+      els.serviceFilters.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      renderResults();
+    });
+  });
 }
 
 function fillCustomForm(project) {
@@ -511,6 +551,7 @@ async function saveCustomProject() {
 function filteredLeads() {
   return leads.filter((lead) => {
     if (activeFilter !== "all" && lead.lead_fit !== activeFilter) return false;
+    if (activeServiceFilter !== "all" && lead.recommended_project_id !== activeServiceFilter) return false;
     if (activeRubroFilter !== "all" && lead.business_type !== activeRubroFilter) return false;
     return true;
   });
@@ -614,10 +655,10 @@ async function markLeadContacted(id) {
 
 function startSearchProgress() {
   const steps = [
-    "Escaneando negocios en todos los rubros…",
-    "Obteniendo reseñas de Google…",
-    "Detectando dolores y servicios con IA…",
-    "Agrupando leads por negocio…",
+    "Escaneando comercios de la zona…",
+    "Leyendo reseñas con dolor…",
+    "Matcheando cada dolor con un servicio SofIA…",
+    "Agrupando leads por servicio…",
   ];
   let step = 0;
   setLoading(true, steps[0]);
@@ -642,12 +683,13 @@ function applySearchResponse(data) {
   lastSearchHistoryId = data.search_history_id || null;
   selectedIds.clear();
   activeFilter = "all";
+  activeServiceFilter = "all";
   activeRubroFilter = "all";
   els.fitFilters.querySelectorAll(".chip").forEach((chip) => {
     chip.classList.toggle("active", chip.dataset.filter === "all");
   });
   let summaryText = data.summary || "";
-  if (data.from_cache) summaryText = `⚡ Desde caché. ${summaryText}`;
+  if (data.from_cache) summaryText = `Desde caché. ${summaryText}`;
   els.summary.textContent = summaryText;
   els.summary.hidden = !summaryText;
   updateStats(
@@ -655,6 +697,7 @@ function applySearchResponse(data) {
     data.reviews_classified ?? data.reviews_analyzed ?? 0,
     data.reviews_skipped || 0
   );
+  renderServiceFilters();
   renderRubroFilters(data.rubro_summary || []);
   renderRubroInsights();
   renderResults();
@@ -713,6 +756,7 @@ async function loadHistorySearch(historyId) {
 function reviewSamplesHtml(lead) {
   const samples = lead.review_samples || [];
   if (!samples.length) {
+    if (!lead.review_text) return "";
     return `<p class="review-text">"${escapeHtml(lead.review_text)}"</p>`;
   }
   return `
@@ -730,6 +774,31 @@ function reviewSamplesHtml(lead) {
     </div>`;
 }
 
+function groupVisibleLeadsByService(visible) {
+  const order = [];
+  const groups = new Map();
+  for (const lead of visible) {
+    const key = lead.recommended_project_id || "other";
+    const label = lead.recommended_project_name || "Otro servicio SofIA";
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, leads: [] });
+      order.push(key);
+    }
+    groups.get(key).leads.push(lead);
+  }
+  // Prefer catalog order
+  const catalogOrder = projects.map((p) => p.id);
+  order.sort((a, b) => {
+    const ia = catalogOrder.indexOf(a);
+    const ib = catalogOrder.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return order.map((k) => groups.get(k));
+}
+
 function groupVisibleLeadsByRubro(visible) {
   const order = [];
   const groups = new Map();
@@ -745,13 +814,16 @@ function groupVisibleLeadsByRubro(visible) {
   return order.map((k) => groups.get(k));
 }
 
-function leadCardHtml(lead, { hideRubroBadge = false } = {}) {
+function leadCardHtml(lead, { hideServiceBadge = false } = {}) {
   const id = leadId(lead);
   const checked = selectedIds.has(id) ? "checked" : "";
   const selectedClass = selectedIds.has(id) ? "selected" : "";
-  const reviewsLabel = lead.reviews_count > 1 ? `${lead.reviews_count} reseñas` : "1 reseña";
   const waDisabled = lead.phone ? "" : " disabled title=\"Sin teléfono en Google\"";
   const emailDisabled = lead.email ? "" : " disabled title=\"Google no publica email para este negocio\"";
+  const themes = (lead.themes || []).slice(0, 4);
+  const painText = themes.length
+    ? themes.map((t) => escapeHtml(t)).join(" · ")
+    : "Dolor detectado en reseñas de Google";
 
   return `
     <article class="lead-card ${selectedClass}" data-id="${id}">
@@ -760,27 +832,26 @@ function leadCardHtml(lead, { hideRubroBadge = false } = {}) {
         <div class="lead-header">
           <h3>${escapeHtml(lead.place_name)}</h3>
           <div class="lead-badges">
-            ${!hideRubroBadge && lead.business_type_label ? `<span class="badge rubro">${escapeHtml(lead.business_type_label)}</span>` : ""}
-            ${lead.recommended_project_name ? `<span class="badge service">${escapeHtml(lead.recommended_project_name)}</span>` : ""}
+            ${lead.business_type_label ? `<span class="badge rubro">${escapeHtml(lead.business_type_label)}</span>` : ""}
+            ${!hideServiceBadge && lead.recommended_project_name ? `<span class="badge service">${escapeHtml(lead.recommended_project_name)}</span>` : ""}
             <span class="badge ${lead.lead_fit}">${lead.lead_fit}</span>
           </div>
         </div>
         <p class="meta">
           ${escapeHtml(lead.address || "Sin dirección")}
           ${lead.rating ? ` · ⭐ ${lead.rating}` : ""}
-          · ${reviewsLabel}
         </p>
         ${contactsHtml(lead, id)}
-        ${themesHtml(lead)}
+        <p class="pain-line"><strong>Dolor:</strong> ${painText}</p>
+        ${lead.solution_value ? `<p class="sofia-help"><strong>Cómo SofIA ayuda:</strong> ${escapeHtml(lead.solution_value)}</p>` : ""}
+        ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
+        ${lead.reason ? `<p class="reason"><strong>Por qué es lead:</strong> ${escapeHtml(lead.reason)}</p>` : ""}
         ${reviewSamplesHtml(lead)}
         ${statusSelectHtml(lead, id)}
-        <p class="reason"><strong>Resumen:</strong> ${escapeHtml(lead.reason)}</p>
-        ${lead.suggested_pitch ? `<p class="pitch"><strong>Pitch sugerido:</strong> ${escapeHtml(lead.suggested_pitch)}</p>` : ""}
-        ${lead.solution_value ? `<p class="solution-value"><strong>Cómo mejora la solución:</strong> ${escapeHtml(lead.solution_value)}</p>` : ""}
         <div class="lead-actions">
-          <button type="button" class="btn btn-secondary btn-sm" data-action="whatsapp" data-id="${id}"${waDisabled}>WhatsApp</button>
+          <button type="button" class="btn btn-sm btn-whatsapp-primary" data-action="whatsapp" data-id="${id}"${waDisabled}>WhatsApp</button>
           <button type="button" class="btn btn-secondary btn-sm" data-action="email" data-id="${id}"${emailDisabled}>Email</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="bot" data-id="${id}">Bot de ventas</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="bot" data-id="${id}">Practicar pitch</button>
         </div>
       </div>
     </article>`;
@@ -849,9 +920,9 @@ function renderResults() {
 
   if (!hasSearched) {
     els.results.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">🔍</div>
-        <p>Configurá la zona en el mapa y tocá <strong>Generar leads</strong>. La IA detectará rubro y servicio por cada negocio.</p>
+      <div class="empty empty-hero">
+        <h2>SofIA Leads</h2>
+        <p>Elegí una zona y tocá <strong>Buscar leads</strong>. Vas a ver comercios con dolores en Google y el servicio SofIA que conviene ofrecerles.</p>
       </div>`;
     els.summary.hidden = true;
     return;
@@ -862,9 +933,8 @@ function renderResults() {
   if (!leads.length) {
     els.results.innerHTML = `
       <div class="empty">
-        <div class="empty-icon">📭</div>
-        <p><strong>No se encontraron leads</strong> en esta búsqueda.</p>
-        <p class="empty-hint">Probá aumentar el radio o la cantidad de lugares a escanear.</p>
+        <p><strong>No hay leads en esta zona</strong></p>
+        <p class="empty-hint">Abrí Ajustes y subí el radio o la cantidad de lugares.</p>
       </div>`;
     return;
   }
@@ -873,24 +943,24 @@ function renderResults() {
     els.results.innerHTML = `
       <div class="empty">
         <p>No hay leads con el filtro actual.</p>
-        <p class="empty-hint">Probá <strong>Todos</strong> u otro rubro.</p>
+        <p class="empty-hint">Probá <strong>Todos los servicios</strong> u otra prioridad.</p>
       </div>`;
     return;
   }
 
-  const groups = groupVisibleLeadsByRubro(visible);
+  const groups = groupVisibleLeadsByService(visible);
   const multipleGroups = groups.length > 1;
 
   els.results.innerHTML = groups
     .map(
       (group) => `
-    <section class="rubro-group">
-      <header class="rubro-group-header">
+    <section class="service-group">
+      <header class="service-group-header">
         <h3>${escapeHtml(group.label)}</h3>
-        <span class="rubro-group-count">${group.leads.length} lead${group.leads.length === 1 ? "" : "s"}</span>
+        <span class="service-group-count">${group.leads.length} lead${group.leads.length === 1 ? "" : "s"}</span>
       </header>
-      <div class="rubro-group-leads">
-        ${group.leads.map((lead) => leadCardHtml(lead, { hideRubroBadge: multipleGroups })).join("")}
+      <div class="service-group-leads">
+        ${group.leads.map((lead) => leadCardHtml(lead, { hideServiceBadge: multipleGroups })).join("")}
       </div>
     </section>`
     )
@@ -1094,6 +1164,9 @@ function updateStats(places, classified, skipped = 0) {
   els.statPlaces.textContent = places;
   els.statReviews.textContent = skipped > 0 ? `${classified} (${skipped} omit.)` : classified;
   els.statLeads.textContent = leads.length;
+  if (els.statHigh) {
+    els.statHigh.textContent = leads.filter((l) => l.lead_fit === "high").length;
+  }
   updateSelectedCount();
 }
 
@@ -1119,15 +1192,59 @@ async function runSearch() {
   startSearchProgress();
 
   try {
-    const data = await apiPost("/api/search", {
+    const payload = {
       center,
-      radius_km: Number(els.radius.value),
-      max_places: Number(els.maxPlaces.value),
+      radius_km: Number(els.radius?.value) || 8,
+      max_places: Number(els.maxPlaces.value) || 36,
+      mode: "leads",
+      search_focus: "all",
       ...searchFiltersPayload(),
-    });
+    };
+
+    const data = await apiPost("/api/search", payload);
     applySearchResponse(data);
   } catch (err) {
     showError(err.message || "Ocurrió un error inesperado");
+  } finally {
+    stopSearchProgress();
+  }
+}
+
+async function runMendozaCabanasCampaign() {
+  hideError();
+  const confirmRun = window.confirm(
+    "¿Barrer cabañas en todas las zonas turísticas de Mendoza?\n\nModo directorio (contactos + teléfono). Puede tardar varios minutos y consume cuota de Google Places."
+  );
+  if (!confirmRun) return;
+
+  startSearchProgress();
+  if (els.loadingText) {
+    els.loadingText.textContent = "Campaña Mendoza · cabañas: recorriendo zonas turísticas…";
+  }
+
+  try {
+    const data = await apiPost("/api/campaigns/mendoza-cabanas", {
+      mode: "directory",
+      max_places_per_zone: Math.max(Number(els.maxPlaces?.value) || 40, 40),
+      use_cache: els.useCache?.checked ?? true,
+    });
+    applySearchResponse({
+      ...data,
+      places_scanned: data.places_scanned,
+      reviews_classified: 0,
+      reviews_analyzed: 0,
+      reviews_skipped: 0,
+      summary: data.summary,
+      leads: data.leads || [],
+      rubro_summary: [],
+      search_history_id: data.search_history_id,
+      from_cache: false,
+    });
+    if (els.statHigh) {
+      els.statHigh.textContent = String(data.with_phone || 0);
+    }
+  } catch (err) {
+    showError(err.message || "Error en la campaña Mendoza cabañas");
   } finally {
     stopSearchProgress();
   }
@@ -1168,8 +1285,9 @@ function exportSelected() {
 }
 
 function bindEvents() {
-  els.radius.addEventListener("input", updateCircle);
+  els.radius?.addEventListener("input", updateCircle);
   els.searchBtn.addEventListener("click", runSearch);
+  els.mendozaCabanasBtn?.addEventListener("click", runMendozaCabanasCampaign);
 
   document.getElementById("geocode-btn").addEventListener("click", async () => {
     const q = els.addressSearch.value.trim();
@@ -1274,8 +1392,11 @@ function bindEvents() {
 async function init() {
   initMap();
   bindEvents();
-  await loadServiceCatalog();
-  await loadLocationPresets();
+  await Promise.all([loadServiceCatalog(), loadLocationPresets()]);
+  if (els.searchMode) els.searchMode.value = "leads";
+  if (els.searchFocus) els.searchFocus.value = "all";
+  if (els.radius && !els.radius.value) els.radius.value = "8";
+  updateCircle();
   renderResults();
 }
 

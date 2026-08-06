@@ -5,7 +5,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
-from app.data.business_types import all_searchable_types, label_for
+from app.data.business_types import (
+    BUSINESS_TYPE_LABELS,
+    all_searchable_types,
+    label_for,
+    list_search_focuses,
+)
 from app.data.lead_filters import is_prospectable_place, is_prospectable_rubro
 from app.data.services import DISCOVERY_INTRO, get_profile
 from app.db.store import get_store
@@ -17,6 +22,19 @@ from app.services.places import PlacesService
 router = APIRouter(prefix="/api", tags=["search"])
 
 FIT_PRIORITY = {LeadFit.HIGH: 0, LeadFit.MEDIUM: 1, LeadFit.LOW: 2, LeadFit.NONE: 3}
+
+
+@router.get("/search/focuses")
+async def get_search_focuses() -> list[dict]:
+    return list_search_focuses()
+
+
+@router.get("/search/business-types")
+async def get_business_types() -> list[dict[str, str]]:
+    return [
+        {"value": key, "label": label}
+        for key, label in BUSINESS_TYPE_LABELS.items()
+    ]
 
 
 @dataclass
@@ -175,6 +193,7 @@ async def _run_search(request: SearchRequest) -> SearchResponse:
         radius_km=request.radius_km,
         max_results=request.max_places,
         business_types=types_filter,
+        search_focus=request.search_focus,
     )
 
     place_drafts: dict[str, PlaceLeadDraft] = {}
@@ -320,11 +339,150 @@ async def _run_search(request: SearchRequest) -> SearchResponse:
         project_id=None,
         project_name="Detección automática",
         discovery_mode=True,
+        mode="leads",
         places_scanned=len(discovery_items),
         reviews_fetched=reviews_fetched,
         reviews_classified=reviews_classified,
         reviews_skipped=reviews_skipped,
         reviews_analyzed=reviews_classified,
+        from_cache=False,
+        leads=leads,
+        summary=summary,
+        rubro_summary=_build_rubro_summary(leads),
+        category_suggestions=[],
+    )
+
+
+def _default_service_for_type(business_type: str) -> tuple[str | None, str | None]:
+    lodging_types = {
+        "lodging",
+        "hotel",
+        "guest_house",
+        "cottage",
+        "motel",
+        "hostel",
+        "resort_hotel",
+        "bed_and_breakfast",
+        "extended_stay_hotel",
+        "campground",
+    }
+    if business_type in lodging_types:
+        profile = get_profile("booking-bot")
+        if profile:
+            return profile.id, profile.name
+    return "booking-bot", "Bot de reservas"
+
+
+async def _run_directory(request: SearchRequest) -> SearchResponse:
+    """Lista negocios del rubro/foco sin filtrar por reseñas (modo directorio)."""
+    places_service = PlacesService()
+
+    if request.business_type:
+        types_filter = [request.business_type]
+        focus = None
+    else:
+        types_filter = None
+        focus = request.search_focus or "all"
+
+    discovery_items = await places_service.search_discovery(
+        lat=request.center.lat,
+        lng=request.center.lng,
+        radius_km=request.radius_km,
+        max_results=request.max_places,
+        business_types=types_filter,
+        search_focus=focus,
+    )
+
+    leads: list[ReviewLead] = []
+    for item in discovery_items:
+        place_summary = item["place"]
+        search_business_type = item["business_type"]
+        place_id = place_summary.get("id", "")
+        if not place_id:
+            continue
+
+        try:
+            details = await places_service.get_place_details(place_id)
+        except Exception:
+            continue
+
+        place_name = PlacesService.place_name(details)
+        address = details.get("formattedAddress")
+        place_rating = details.get("rating")
+        lat, lng = PlacesService.extract_location(details)
+        inferred_type = PlacesService.infer_business_type(details, search_business_type)
+        place_types = details.get("types") or []
+        primary_type = details.get("primaryType")
+
+        if not is_prospectable_place(
+            place_name,
+            primary_type=primary_type,
+            types=place_types,
+        ):
+            continue
+
+        if not _place_passes_rating_filter(place_rating, request.max_place_rating):
+            continue
+
+        contacts = PlacesService.extract_contacts(details)
+        type_label = label_for(inferred_type)
+        service_id, service_name = _default_service_for_type(inferred_type)
+
+        leads.append(
+            ReviewLead(
+                place_name=place_name,
+                place_id=place_id,
+                address=address,
+                lat=lat,
+                lng=lng,
+                phone=contacts["phone"],
+                email=contacts["email"],
+                website=contacts["website"],
+                google_maps_url=contacts["google_maps_url"],
+                rating=place_rating,
+                lead_fit=LeadFit.LOW,
+                themes=[],
+                theme_counts={},
+                reviews_count=0,
+                review_samples=[],
+                review_text="",
+                review_rating=None,
+                author=None,
+                reason="Listado en zona (modo directorio). Ideal para contactar con bot de reservas / WhatsApp.",
+                suggested_pitch=None,
+                solution_value=None,
+                business_type=inferred_type,
+                business_type_label=type_label,
+                recommended_project_id=service_id,
+                recommended_project_name=service_name,
+            )
+        )
+
+    leads.sort(key=lambda item: (item.business_type_label or "", item.place_name.lower()))
+    with_phone = sum(1 for lead in leads if lead.phone)
+    rubro_label = label_for(request.business_type) if request.business_type else (
+        "Alojamiento turístico" if request.search_focus == "lodging" else "Negocios"
+    )
+    summary = (
+        f"Se listaron {len(leads)} {rubro_label.lower()} en la zona "
+        f"({with_phone} con teléfono en Google). "
+        f"Marcá contactados desde cada fila o abrí WhatsApp. "
+        f"Nota: Google Places no garantiza el 100% de los locales de una ciudad."
+    )
+
+    return SearchResponse(
+        center=request.center,
+        radius_km=request.radius_km,
+        business_type=request.business_type or request.search_focus or "all",
+        project_id=None,
+        project_name="Listado de zona",
+        discovery_mode=True,
+        mode="directory",
+        places_scanned=len(discovery_items),
+        reviews_fetched=0,
+        reviews_classified=0,
+        reviews_skipped=0,
+        reviews_analyzed=0,
         from_cache=False,
         leads=leads,
         summary=summary,
@@ -341,9 +499,14 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
             detail=f"project_id '{request.project_id}' no existe. Ver GET /api/projects",
         )
 
+    mode = (request.mode or "leads").lower()
+    if mode not in ("leads", "directory"):
+        raise HTTPException(status_code=400, detail="mode debe ser 'leads' o 'directory'")
+
     try:
         PlacesService()
-        ReviewClassifier()
+        if mode == "leads":
+            ReviewClassifier()
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -363,7 +526,7 @@ async def search_leads(request: SearchRequest) -> SearchResponse:
             return _persist_search_result(request, response, from_cache=True)
 
     try:
-        response = await _run_search(request)
+        response = await _run_directory(request) if mode == "directory" else await _run_search(request)
     except HTTPException:
         raise
     except Exception as exc:

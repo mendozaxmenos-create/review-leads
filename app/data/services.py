@@ -17,10 +17,10 @@ SERVICE_PROFILES: list[ServiceProfile] = [
         description=(
             "Automatización e inteligencia artificial a medida: asistentes virtuales, "
             "análisis de datos, generación de contenido, chatbots inteligentes y "
-            "optimización de procesos con IA."
+            "optimización de procesos con IA. Aplicable a cualquier rubro comercial."
         ),
         lead_criteria=(
-            "Quejas sobre procesos manuales lentos, falta de atención al cliente, "
+            "En cualquier comercio: quejas sobre procesos manuales lentos, falta de atención al cliente, "
             "pérdida de tiempo en tareas repetitivas, necesidad de responder más rápido, "
             "o menciones de que el negocio está desactualizado tecnológicamente."
         ),
@@ -31,26 +31,42 @@ SERVICE_PROFILES: list[ServiceProfile] = [
         name="Bot de reservas",
         description=(
             "Bot automatizado para gestionar reservas, turnos y citas por WhatsApp, web o redes. "
-            "Reduce llamadas perdidas, confirmaciones manuales y no-shows."
+            "Reduce llamadas perdidas, confirmaciones manuales y no-shows. "
+            "Sirve a hoteles, restaurantes, salones, clínicas y cualquier negocio con agenda."
         ),
         lead_criteria=(
-            "Quejas sobre no poder reservar, teléfono siempre ocupado, demoras para conseguir turno, "
-            "mala organización de citas, doble reserva, o dificultad para contactar al negocio."
+            "En cualquier rubro con turnos/reservas: no poder reservar, teléfono siempre ocupado, "
+            "demoras para conseguir turno, mala organización de citas, doble reserva, "
+            "dificultad para contactar, confirmaciones manuales, no-shows."
         ),
-        suggested_business_types=["restaurant", "hair_salon", "spa", "dentist", "gym", "doctor"],
+        suggested_business_types=[
+            "lodging",
+            "hotel",
+            "guest_house",
+            "cottage",
+            "restaurant",
+            "hair_salon",
+            "spa",
+            "dentist",
+            "gym",
+            "doctor",
+            "lawyer",
+        ],
     ),
     ServiceProfile(
         id="crm",
         name="CRM a medida",
         description=(
             "Sistemas CRM personalizados para seguimiento de clientes, pipeline de ventas, "
-            "historial de contactos, recordatorios y reportes para equipos comerciales."
+            "historial de contactos, recordatorios y reportes para equipos comerciales. "
+            "Útil en inmobiliarias, estudios, comercios y servicios."
         ),
         lead_criteria=(
-            "Quejas sobre seguimiento deficiente, clientes olvidados, falta de comunicación post-venta, "
-            "desorganización del equipo, pérdida de leads o menciones de que no devuelven llamadas."
+            "En cualquier rubro comercial: seguimiento deficiente, clientes olvidados, "
+            "falta de comunicación post-venta, desorganización del equipo, "
+            "pérdida de leads o menciones de que no devuelven llamadas."
         ),
-        suggested_business_types=["real_estate_agency", "car_dealer", "insurance_agency", "lawyer", "store"],
+        suggested_business_types=["real_estate_agency", "car_dealer", "insurance_agency", "lawyer", "store", "restaurant"],
     ),
     ServiceProfile(
         id="it-solutions",
@@ -60,23 +76,24 @@ SERVICE_PROFILES: list[ServiceProfile] = [
             "soporte técnico, automatización de workflows y modernización de sistemas legacy."
         ),
         lead_criteria=(
-            "Problemas con sistemas que fallan, software lento o viejo, falta de integración entre herramientas, "
-            "pérdida de datos, errores técnicos recurrentes o necesidad de digitalizar procesos en papel."
+            "En cualquier comercio: sistemas que fallan, software lento o viejo, "
+            "falta de integración entre herramientas, pérdida de datos, "
+            "errores técnicos recurrentes o necesidad de digitalizar procesos en papel."
         ),
-        suggested_business_types=["store", "accounting", "lawyer", "real_estate_agency", "hospital"],
+        suggested_business_types=["store", "accounting", "lawyer", "real_estate_agency", "restaurant"],
     ),
     ServiceProfile(
         id="apps",
         name="Apps y desarrollo web",
         description=(
             "Desarrollo de aplicaciones móviles, plataformas web, e-commerce, paneles de administración "
-            "y productos digitales a medida."
+            "y productos digitales a medida para cualquier comercio."
         ),
         lead_criteria=(
-            "Quejas sobre no tener app propia, web desactualizada o inexistente, mala experiencia online, "
-            "no poder pedir por internet, checkout complicado o dependencia excesiva de terceros (Rappi, etc.)."
+            "En cualquier rubro: no tener app propia, web desactualizada o inexistente, mala experiencia online, "
+            "no poder pedir/pagar por internet, checkout complicado o dependencia excesiva de terceros (Rappi, etc.)."
         ),
-        suggested_business_types=["restaurant", "store", "gym", "cafe", "bakery"],
+        suggested_business_types=["restaurant", "store", "gym", "cafe", "bakery", "hotel"],
     ),
     ServiceProfile(
         id="cursor-dev",
@@ -86,18 +103,21 @@ SERVICE_PROFILES: list[ServiceProfile] = [
             "features nuevas, integraciones y productos digitales en tiempo récord."
         ),
         lead_criteria=(
-            "Menciones de presupuestos altos de desarrollo, proyectos que nunca arrancan, "
-            "necesidad urgente de una solución digital, o frustración con proveedores de software lentos."
+            "En cualquier rubro: presupuestos altos de desarrollo, proyectos que nunca arrancan, "
+            "necesidad urgente de una solución digital, o frustración con proveedores de software lentos. "
+            "También fallback cuando el dolor es digital pero no encaja en un servicio más específico."
         ),
-        suggested_business_types=["store", "restaurant", "startup", "real_estate_agency", "gym"],
+        suggested_business_types=["store", "restaurant", "startup", "real_estate_agency", "gym", "lawyer"],
     ),
 ]
 
 _PROFILES_BY_ID = {profile.id: profile for profile in SERVICE_PROFILES}
 
 DISCOVERY_INTRO = (
-    "Estudio de desarrollo con Cursor (IA asistida): software a medida, automatizaciones, "
-    "bots de WhatsApp, CRMs, apps web/móvil, integraciones e IA aplicada a cualquier proceso digital."
+    "SofIA: estudio de desarrollo con Cursor (IA asistida). Vendemos a cualquier comercio privado: "
+    "bots de reservas/WhatsApp, CRM a medida, apps web/móvil, soluciones con IA, IT e integraciones, "
+    "y desarrollo ágil. Elegí el servicio del catálogo que mejor matchee el dolor de la reseña; "
+    "el rubro del negocio NO limita qué servicio podés recomendar."
 )
 
 
