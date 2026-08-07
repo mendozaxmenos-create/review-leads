@@ -302,6 +302,83 @@ class BulkMessageResponse(BaseModel):
     messages: list[BulkMessageItem]
 
 
+class SendCampaignRequest(BaseModel):
+    """Envío masivo WhatsApp (Twilio) a leads ready / CRM new."""
+
+    source: str = Field(
+        default="csv",
+        description="csv = mendoza-cabanas-ready.csv | crm = saved_leads status=new",
+    )
+    csv_path: str | None = Field(
+        default=None,
+        description="Ruta CSV ready (default data/exports/mendoza-cabanas-ready.csv)",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="true = no llama a Twilio; false requiere TWILIO_SEND_ENABLED=true",
+    )
+    limit: int | None = Field(default=None, ge=1, le=500)
+    only_status: str = Field(default="new", description="Filtro CRM status")
+    mark_contacted: bool = Field(
+        default=True,
+        description="Marcar CRM contacted tras envío OK (también en dry_run si update_crm_on_dry_run)",
+    )
+    update_crm_on_dry_run: bool = False
+
+
+class SendCampaignItemResult(BaseModel):
+    place_id: str
+    place_name: str
+    phone: str | None = None
+    to: str | None = None
+    ok: bool
+    dry_run: bool
+    sid: str | None = None
+    status: str | None = None
+    error: str | None = None
+    crm_updated: bool = False
+
+
+class SendCampaignResponse(BaseModel):
+    dry_run: bool
+    total: int
+    sent_ok: int
+    failed: int
+    crm_updated: int
+    delay_seconds: float
+    items: list[SendCampaignItemResult]
+    summary: str
+
+
+class MendozaWaSyncResponse(BaseModel):
+    csv: str
+    rows: int
+    inserted: int
+    updated: int
+    skipped_terminal_refresh: int
+    history_id: int
+
+
+class MendozaWaSendRequest(BaseModel):
+    dry_run: bool = True
+    limit: int | None = Field(default=None, ge=1, le=500)
+    skip_already_sent: bool = True
+    mark_contacted: bool = True
+    update_crm_on_dry_run: bool = False
+
+
+class MendozaWaDashboard(BaseModel):
+    campaign: str
+    universe: int
+    csv_rows: int
+    crm_tagged: int
+    by_status: dict[str, int]
+    pending_to_send: int
+    sent_live_unique: int
+    send_log: dict[str, int]
+    blockers: list[str]
+
+
 class LeadStatus(str, Enum):
     NEW = "new"
     CONTACTED = "contacted"

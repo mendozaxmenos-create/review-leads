@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.db.store import get_store
-from app.routers import admin, campaigns, geocode, history, outreach, projects, search
+from app.routers import admin, campaigns, geocode, history, outreach, projects, search, twilio_webhooks
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -39,6 +39,7 @@ app.include_router(projects.router)
 app.include_router(search.router)
 app.include_router(campaigns.router)
 app.include_router(outreach.router)
+app.include_router(twilio_webhooks.router)
 app.include_router(history.router)
 app.include_router(admin.router)
 app.include_router(geocode.router)
@@ -52,6 +53,11 @@ async def index() -> FileResponse:
 @app.get("/admin")
 async def admin_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "admin.html")
+
+
+@app.get("/campaign")
+async def campaign_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "campaign.html")
 
 
 @app.get("/health")

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campaña Mendoza · SofIA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body class="admin-body">
+    <header>
+      <div class="header-row">
+        <div class="brand-block">
+          <p class="brand-mark">SofIA</p>
+          <h1>Campaña Mendoza · cabañas</h1>
+          <p class="brand-tagline">
+            Subí la base → Twilio manda el primer mensaje → cuando contestan, seguís en tu WhatsApp
+          </p>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="refresh-btn">Actualizar</button>
+          <a href="/admin" class="btn btn-secondary btn-sm">CRM</a>
+          <a href="/" class="btn btn-secondary btn-sm">← Búsqueda</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <section class="admin-stats" id="stats-row" aria-label="KPIs campaña"></section>
+
+      <section class="panel campaign-controls">
+        <h2>1. Base</h2>
+        <p class="map-hint">Mendoza limpia ya está cargada. Podés subir otro CSV (mismo formato) si hace falta.</p>
+        <div class="actions-row">
+          <input type="file" id="csv-file" accept=".csv" />
+          <button type="button" class="btn btn-secondary" id="upload-btn">Subir CSV</button>
+          <button type="button" class="btn btn-secondary" id="sync-btn">Re-sync CSV actual → CRM</button>
+        </div>
+      </section>
+
+      <section class="panel campaign-controls">
+        <h2>2. Envío automático (Twilio)</h2>
+        <p class="map-hint" id="blockers"></p>
+        <p class="map-hint" id="webhook-hint"></p>
+        <div class="actions-row">
+          <label>
+            Cantidad por lote
+            <input type="number" id="batch-size" min="1" max="250" value="10" style="width: 5rem" />
+          </label>
+          <button type="button" class="btn btn-secondary" id="dry-btn">Probar dry-run</button>
+          <button type="button" class="btn btn-primary" id="live-btn" disabled>
+            Enviar lote vía Twilio
+          </button>
+        </div>
+        <p class="map-hint">
+          Twilio solo para el <strong>primer contacto</strong>. Cuando responden, abrís la charla en tu WhatsApp
+          personal (gratis para vos) — no sigas respondiendo por Twilio.
+        </p>
+      </section>
+
+      <div class="error-banner" id="error" role="alert"></div>
+      <div class="summary-box" id="summary" hidden></div>
+
+      <section class="admin-table-wrap panel">
+        <h2>Contestaron — seguir fuera de Twilio</h2>
+        <p class="map-hint" id="handoff-hint"></p>
+        <div class="admin-table-scroll">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Negocio</th>
+                <th>Zona</th>
+                <th>Última respuesta</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="responded-tbody">
+              <tr>
+                <td colspan="4" class="admin-empty">Nadie respondió todavía</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel campaign-controls">
+        <h2>3. Respuestas rápidas (tu WhatsApp)</h2>
+        <p class="map-hint">
+          Copiá el texto y pegalo en la charla personal. Opcional: poné el nombre del complejo para personalizar.
+        </p>
+        <div class="actions-row" style="margin-bottom: 1rem">
+          <label>
+            Nombre del complejo
+            <input type="text" id="reply-place-name" placeholder="ej. Amalar Cabañas" style="min-width: 14rem" />
+          </label>
+        </div>
+        <div id="quick-replies" class="quick-replies" aria-label="Respuestas rápidas"></div>
+      </section>
+
+      <section class="admin-table-wrap panel">
+        <h2>Pipeline CRM (campaña)</h2>
+        <div class="admin-table-scroll">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Negocio</th>
+                <th>Zona</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Abrir</th>
+              </tr>
+            </thead>
+            <tbody id="leads-tbody">
+              <tr>
+                <td colspan="5" class="admin-empty">Cargando…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-table-wrap panel">
+        <h2>Log envíos Twilio</h2>
+        <div class="admin-table-scroll">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Cuándo</th>
+                <th>Negocio</th>
+                <th>Modo</th>
+                <th>OK</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="sends-tbody">
+              <tr>
+                <td colspan="5" class="admin-empty">Sin envíos</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="loading-overlay" id="loading" hidden>
+      <div class="spinner"></div>
+      <p id="loading-text">Procesando…</p>
+    </div>
+
+    <script src="/static/js/campaign.js?v=3"></script>
+  </body>
+</html>

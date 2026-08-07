@@ -12,3 +12,8 @@ build/
 .ruff_cache/
 *.log
 .DS_Store
+.cursor/
+tools/
+app/static/sofia-wa-avatar-circle-preview.png
+app/static/sofia-wa-avatar-preview.jpg
+app/static/_debug_*.png

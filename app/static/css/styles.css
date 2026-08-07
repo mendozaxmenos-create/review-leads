@@ -1380,3 +1380,39 @@ input[type="range"] {
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* Campaña: respuestas rápidas */
+.quick-replies {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.quick-reply-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--panel, #fff) 92%, var(--brand) 8%);
+}
+
+.quick-reply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.quick-reply-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.quick-reply-card pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text, #1e293b);
+}

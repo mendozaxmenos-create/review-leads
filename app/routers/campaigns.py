@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.data.ar_locations import MENDOZA_CABANAS_ZONES, list_mendoza_cabanas_zones
 from app.data.services import get_profile
@@ -243,3 +245,153 @@ async def run_mendoza_cabanas(
 
 # Re-export zones constant for scripts
 __all__ = ["router", "MENDOZA_CABANAS_ZONES"]
+
+
+@router.post("/mendoza-cabanas/sync")
+async def sync_mendoza_etl() -> dict:
+    """Importa CSV ETL limpio al CRM (tag mendoza-cabanas-etl)."""
+    from app.services.mendoza_campaign import sync_etl_clean_to_crm
+
+    try:
+        return sync_etl_clean_to_crm()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/mendoza-cabanas/dashboard")
+async def mendoza_wa_dashboard() -> dict:
+    from app.services.mendoza_campaign import campaign_dashboard_stats
+
+    return campaign_dashboard_stats()
+
+
+@router.get("/mendoza-cabanas/sends")
+async def mendoza_wa_sends(limit: int = 100, live_only: bool = False) -> list[dict]:
+    from app.services.mendoza_campaign import CAMPAIGN_ID
+
+    store = get_store()
+    store.init()
+    return store.list_campaign_sends(CAMPAIGN_ID, limit=min(limit, 500), only_live=live_only)
+
+
+@router.get("/mendoza-cabanas/leads")
+async def mendoza_wa_leads(limit: int = 500) -> list[dict]:
+    from app.services.mendoza_campaign import CAMPAIGN_TAG
+
+    store = get_store()
+    store.init()
+    rows = store.list_leads_by_campaign_tag(CAMPAIGN_TAG, limit=min(limit, 2000))
+    return [
+        {
+            "id": r["id"],
+            "place_id": r["place_id"],
+            "status": r["status"],
+            "notes": r["notes"],
+            "updated_at": r["updated_at"],
+            "lead": r["lead"],
+        }
+        for r in rows
+    ]
+
+
+@router.post("/mendoza-cabanas/send-wa")
+async def send_mendoza_wa(body: dict | None = None) -> dict:
+    """Cola de envío WhatsApp (dry_run=true por defecto). Bloquea live si remitente es Sandbox US."""
+    from app.services.mendoza_campaign import run_mendoza_wa_campaign
+
+    payload = body or {}
+    try:
+        result = await run_mendoza_wa_campaign(
+            dry_run=bool(payload.get("dry_run", True)),
+            limit=payload.get("limit"),
+            skip_already_sent=bool(payload.get("skip_already_sent", True)),
+            mark_contacted=bool(payload.get("mark_contacted", True)),
+            update_crm_on_dry_run=bool(payload.get("update_crm_on_dry_run", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return result.model_dump()
+
+
+@router.post("/mendoza-cabanas/upload")
+async def upload_mendoza_csv(file: UploadFile = File(...)) -> dict:
+    """Sube un CSV de campaña y lo sincroniza al CRM."""
+    from app.services.mendoza_campaign import CAMPAIGN_TAG, sync_etl_clean_to_crm
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Subí un archivo .csv")
+    export_dir = Path(__file__).resolve().parents[2] / "data" / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    dest = export_dir / "mendoza-cabanas-etl-clean.csv"
+    content = await file.read()
+    dest.write_bytes(content)
+    result = sync_etl_clean_to_crm(csv_path=dest)
+    result["campaign_tag"] = CAMPAIGN_TAG
+    return result
+
+
+@router.get("/mendoza-cabanas/responded")
+async def list_responded(limit: int = 100) -> list[dict]:
+    from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
+
+    store = get_store()
+    store.init()
+    rows = store.list_responded_campaign_leads(CAMPAIGN_TAG, limit=min(limit, 500))
+    out = []
+    for r in rows:
+        lead = r["lead"]
+        msgs = store.list_campaign_messages(
+            CAMPAIGN_ID, place_id=r["place_id"], limit=5
+        )
+        last_in = next((m for m in msgs if m["direction"] == "inbound"), None)
+        phone = lead.get("phone") or ""
+        digits = "".join(ch for ch in phone if ch.isdigit())
+        out.append(
+            {
+                "id": r["id"],
+                "place_id": r["place_id"],
+                "place_name": lead.get("place_name"),
+                "zone": lead.get("zone"),
+                "phone": phone,
+                "status": r["status"],
+                "notes": r["notes"],
+                "updated_at": r["updated_at"],
+                "last_reply": (last_in or {}).get("body"),
+                "wa_me": f"https://wa.me/{digits}" if digits else None,
+                "mailto": f"mailto:{lead['email']}" if lead.get("email") else None,
+            }
+        )
+    return out
+
+
+@router.get("/mendoza-cabanas/messages")
+async def list_messages(place_id: str | None = None, limit: int = 100) -> list[dict]:
+    from app.services.mendoza_campaign import CAMPAIGN_ID
+
+    store = get_store()
+    store.init()
+    return store.list_campaign_messages(CAMPAIGN_ID, place_id=place_id, limit=min(limit, 500))
+
+
+@router.post("/mendoza-cabanas/handoff")
+async def mark_handoff(body: dict) -> dict:
+    """Marca que seguís la conversación fuera de Twilio (tu WhatsApp / email)."""
+    place_id = (body or {}).get("place_id")
+    channel = (body or {}).get("channel") or "whatsapp_personal"
+    if not place_id:
+        raise HTTPException(status_code=400, detail="place_id requerido")
+    store = get_store()
+    store.init()
+    meta = store.get_saved_leads_by_places([place_id]).get(place_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    note = (meta.get("notes") or "").strip()
+    handoff = f"Handoff {channel} (fuera de Twilio)"
+    store.update_saved_lead(
+        meta["saved_lead_id"],
+        status=meta["status"] if meta["status"] == "responded" else "responded",
+        notes=(note + (" | " if note else "") + handoff),
+    )
+    return {"ok": True, "place_id": place_id, "channel": channel}

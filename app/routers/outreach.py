@@ -8,7 +8,10 @@ from app.models.schemas import (
     ConversationResponse,
     MessageRequest,
     OutreachMessage,
+    SendCampaignRequest,
+    SendCampaignResponse,
 )
+from app.services.campaign_send import run_send_campaign
 from app.services.outreach import OutreachService
 
 router = APIRouter(prefix="/api/outreach", tags=["outreach"])
@@ -68,3 +71,26 @@ async def sales_chat(request: ConversationRequest) -> ConversationResponse:
         project_description=request.project_description,
         messages=request.messages,
     )
+
+
+@router.post("/send-campaign", response_model=SendCampaignResponse)
+async def send_whatsapp_campaign(request: SendCampaignRequest) -> SendCampaignResponse:
+    """Envía plantilla Twilio a leads ready (CSV) o CRM. dry_run=true por defecto."""
+    if request.source not in ("csv", "crm"):
+        raise HTTPException(status_code=400, detail="source debe ser 'csv' o 'crm'")
+    try:
+        return await run_send_campaign(
+            source=request.source,
+            csv_path=request.csv_path,
+            dry_run=request.dry_run,
+            limit=request.limit,
+            only_status=request.only_status,
+            mark_contacted=request.mark_contacted,
+            update_crm_on_dry_run=request.update_crm_on_dry_run,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Error Twilio/campaña: {exc}") from exc

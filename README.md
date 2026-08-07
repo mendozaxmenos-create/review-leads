@@ -50,6 +50,11 @@ Editá `.env` (ver `.env.example`):
 | `NOMINATIM_CONTACT_EMAIL` | Email para geocodificación OSM (recomendado) |
 | `OUTREACH_SENDER_NAME` | Remitente outreach (default: `Gustavo`) |
 | `OUTREACH_SENDER_COMPANY` | Empresa remitente (default: `SofIA`) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Credenciales Twilio |
+| `TWILIO_WHATSAPP_FROM` | Sender prod ej. `whatsapp:+549…` (Sandbox: `whatsapp:+14155238886`) |
+| `TWILIO_TEMPLATE_SID` | Content SID plantilla marketing aprobada (`HX…`) |
+| `TWILIO_SEND_ENABLED` | `true` = envío live; `false` = dry-run |
+| `TWILIO_SEND_DELAY_SECONDS` | Pausa entre mensajes (default `3`) |
 
 ## Ejecutar
 
@@ -60,6 +65,7 @@ Editá `.env` (ver `.env.example`):
 | Ruta | Descripción |
 |------|-------------|
 | http://127.0.0.1:8000 | UI principal — generar leads |
+| http://127.0.0.1:8000/campaign | **Dashboard campaña Mendoza · cabañas** (Twilio + handoff) |
 | http://127.0.0.1:8000/admin | Panel CRM |
 | http://127.0.0.1:8000/docs | API interactiva (Swagger) |
 | http://127.0.0.1:8000/health | Health check |
@@ -91,6 +97,7 @@ Editá `.env` (ver `.env.example`):
 | **WhatsApp** | Genera mensaje y abre `wa.me` con el teléfono de Google |
 | **Email** | Genera mensaje y abre `mailto:` si hay email (Google casi nunca lo expone) |
 | **Bot de ventas** | Simula chat para practicar cierre (**no envía** WhatsApp real) |
+| **Twilio (campaña)** | Envía plantilla WhatsApp Business a leads depurados (ver abajo) |
 
 **Reglas del primer contacto** (`app/data/outreach_guidelines.py`):
 
@@ -100,6 +107,68 @@ Editá `.env` (ver `.env.example`):
 - **Sin reunión** en el primer mensaje (reunión solo en etapas avanzadas del bot)
 
 Al enviar WhatsApp o email desde la UI, el lead pasa a **1 — Contacto realizado** automáticamente.
+
+### Campaña Mendoza · cabañas + Twilio
+
+Flujo de producto: **Twilio = solo el primer mensaje** → cuando contestan, seguís en **tu WhatsApp personal** (respuestas rápidas en el dashboard). Oferta actual: **bot de reservas $19.000/mes**.
+
+#### Dashboard (`/campaign`)
+
+| KPI | Significado |
+|-----|-------------|
+| En base | Leads del CSV limpio |
+| Pendientes de envío | Aún no recibieron el WA de Twilio |
+| Enviados | Mensajes live únicos vía Twilio |
+| Contestaron | Respondieron al primer mensaje |
+| Contactados sin reply | Enviados, todavía no contestaron |
+
+También: upload/sync CSV, lotes dry-run/live, tabla Contestaron + **Abrir en mi WhatsApp**, respuestas rápidas con **Copiar**, log de envíos.
+
+#### Pipeline de datos
+
+1. **Barrido:** `python -m scripts.mendoza_cabanas_sweep --mode directory`
+2. **ETL limpio** (excluye hoteles/camping/Villa Oliva/Las Leñas/tels malos):  
+   `python -m scripts.etl_mendoza_cabanas`  
+   → `data/exports/mendoza-cabanas-etl-clean.csv` (~250 leads)
+3. Sync al CRM desde el dashboard o `POST /api/campaigns/mendoza-cabanas/sync`
+
+#### Twilio (producción)
+
+1. Sender WhatsApp **+54** ONLINE (no Sandbox US para blast)
+2. Plantilla **MARKETING** aprobada: `{{1}}`=nombre, `{{2}}`=zona, precio fijo en el texto  
+   Crear/enviar a Meta: `python scripts/create_wa_template.py`
+3. `.env`: `TWILIO_WHATSAPP_FROM`, `TWILIO_TEMPLATE_SID`, `TWILIO_SEND_ENABLED=true`
+4. Webhook inbound (URL pública): `POST /api/twilio/whatsapp/inbound`  
+   Local: túnel (`cloudflared` / ngrok) apuntando al sender en Twilio
+
+#### Envío por lotes
+
+```bash
+# Dry-run
+python -m scripts.send_mendoza_whatsapp --limit 5
+
+# Live (CLI)
+python -m scripts.send_mendoza_whatsapp --live --limit 10
+
+# Lotes hasta N enviados / resto
+python scripts/send_mendoza_batches.py --target-sent 100 --batch-size 10
+python scripts/send_mendoza_batches.py --remaining-all --batch-size 10
+```
+
+Dashboard: botón **Enviar lote vía Twilio**.  
+API: `POST /api/campaigns/mendoza-cabanas/send-wa`
+
+#### Programar el resto (Windows)
+
+Tarea: `SofIA-Mendoza-WA-Rest` → `scripts/run_mendoza_remaining.bat`  
+Log: `data/exports/mendoza-wa-scheduled.log`  
+La PC debe estar encendida y con sesión iniciada a la hora programada.
+
+#### Handoff (después de que contestan)
+
+1. Dashboard → **Contestaron** → Abrir en mi WhatsApp / Usar nombre  
+2. Sección **Respuestas rápidas** → Copiar pitch de seguimiento  
+3. No responder por Twilio (ahorra costo por mensaje)
 
 ### Bot de ventas
 
@@ -163,6 +232,20 @@ curl -X POST http://127.0.0.1:8000/api/search \
 | `POST` | `/api/outreach/message` |
 | `POST` | `/api/outreach/messages/bulk` |
 | `POST` | `/api/outreach/chat` |
+| `POST` | `/api/outreach/send-campaign` |
+
+### Campaña Mendoza + Twilio
+
+| Método | Ruta |
+|--------|------|
+| `GET` | `/api/campaigns/mendoza-cabanas/dashboard` |
+| `POST` | `/api/campaigns/mendoza-cabanas/sync` |
+| `POST` | `/api/campaigns/mendoza-cabanas/upload` |
+| `POST` | `/api/campaigns/mendoza-cabanas/send-wa` |
+| `GET` | `/api/campaigns/mendoza-cabanas/responded` |
+| `POST` | `/api/campaigns/mendoza-cabanas/handoff` |
+| `POST` | `/api/twilio/whatsapp/inbound` |
+| `POST` | `/api/twilio/whatsapp/status` |
 
 ### Historial y CRM
 
@@ -188,13 +271,14 @@ app/
 ├── main.py
 ├── config.py
 ├── models/          schemas.py, lead_status.py
-├── routers/         search, geocode, admin, history, outreach, projects
-├── db/store.py      SQLite: caché, historial, CRM
-├── services/        places, classifier, geocode, outreach, category_suggester
-├── data/            services, business_types, lead_filters, outreach_guidelines, ar_locations
-└── static/          index.html, admin.html, js/, css/
+├── routers/         search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks
+├── db/store.py      SQLite: caché, historial, CRM, campaign_sends/messages
+├── services/        places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign, campaign_send
+├── data/            services, business_types, cabanas_filter, outreach_guidelines, ar_locations
+└── static/          index.html, campaign.html, admin.html, js/, css/, sofia-wa-avatar.png
+scripts/             etl/sweep/send batches, create_wa_template, run_mendoza_remaining.bat
 Dockerfile
-fly.toml             Fly.io (región gru)
+fly.toml             Fly.io (región gru) — trial vencido hasta agregar billing
 render.yaml          Render Blueprint
 ```
 
@@ -322,6 +406,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Dashboard `/campaign`, Twilio WA prod, ETL Mendoza, handoff + respuestas rápidas, lotes programados |
 | Ago 2026 | Modo directorio: listar hoteles/rubro por localidad + WA + contactado |
 | Jun 2026 | Modo descubrimiento multi-rubro, geocodificación AR, filtros gobierno |
 | Jun 2026 | Outreach SofIA, reseñas Google, CTA sin reunión, `solution_value` |
