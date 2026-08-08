@@ -18,7 +18,7 @@
         <p class="brand-mark">SofIA</p>
         <h1>Probá el bot de reservas</h1>
         <p class="brand-tagline">
-          Usá los atajos o el calendario. Así responde el WhatsApp del complejo — sin que el dueño esté pegado al celular.
+          Chat del huésped + panel CRM del dueño. Mercado Pago se confirma con un webhook simulado (sin cobro real).
         </p>
       </div>
     </header>
@@ -29,13 +29,26 @@
         <p id="demo-property-name" class="demo-prop-name">Demo SofIA</p>
         <p id="demo-property-zone" class="map-hint">Complejo ficticio (se elige al azar)</p>
         <ul class="demo-facts">
-          <li>Elegí fechas con el calendario o los chips</li>
-          <li>Después pedí precio o “quiero reservar”</li>
-          <li>Cuando pedí tu nombre, escribilo abajo o tocá un chip</li>
-          <li>Demo SofIA · ~$19.000/mes el servicio real</li>
+          <li>Reservá con chips / calendario</li>
+          <li>Pagá seña: transferencia o Mercado Pago</li>
+          <li>MP → simulá el webhook; transferencia → aprobá en CRM</li>
         </ul>
         <p class="map-hint" id="turns-left"></p>
         <button type="button" class="btn btn-secondary btn-sm" id="restart-btn">Reiniciar chat</button>
+
+        <section class="demo-owner" aria-label="Vista dueño CRM">
+          <h3>CRM dueño <span class="map-hint">(simulado)</span></h3>
+          <p class="map-hint demo-owner-hint">
+            Acá ves lo que le llegaría al complejo: link MP, comprobante, seña confirmada.
+          </p>
+          <div id="owner-feed" class="demo-owner-feed">
+            <p class="map-hint">Todavía no hay eventos de pago.</p>
+          </div>
+          <div id="owner-actions" class="demo-owner-actions" hidden>
+            <button type="button" class="btn btn-primary btn-sm" id="approve-xfer-btn">Aprobar seña</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="reject-xfer-btn">Rechazar</button>
+          </div>
+        </section>
       </aside>
 
       <section class="demo-chat panel" aria-label="Chat de demo">
@@ -96,6 +109,6 @@
       <p>El bot está respondiendo…</p>
     </div>
 
-    <script src="/static/js/demo.js?v=5"></script>
+    <script src="/static/js/demo.js?v=14"></script>
   </body>
 </html>

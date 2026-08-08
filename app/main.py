@@ -62,8 +62,13 @@ async def campaign_page() -> FileResponse:
 
 
 @app.get("/demo")
-async def demo_page() -> FileResponse:
+async def demo_page(k: str | None = None) -> FileResponse:
+    """Sirve la página; el JS valida el token contra la API."""
+    # Si hay token configurado y falta en la URL, igual servimos HTML
+    # (el front muestra pantalla de acceso denegado al fallar /session).
+    _ = k
     return FileResponse(STATIC_DIR / "demo.html")
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:

@@ -25,5 +25,13 @@ services:
         value: SofIA
       - key: NOMINATIM_CONTACT_EMAIL
         sync: false
+      - key: DEMO_PUBLIC_URL
+        value: https://review-leads.onrender.com
+      - key: DEMO_ACCESS_TOKEN
+        generateValue: true
+      - key: DASHBOARD_ACCESS_TOKEN
+        sync: false
+    # Keep-alive gratis: UptimeRobot → GET https://review-leads.onrender.com/health cada 5 min
+    # (si no, el plan free duerme ~15 min sin tráfico).
     # Plan free: sin disco persistente. SQLite en /tmp se resetea al reiniciar.
     # Para CRM permanente: plan pago + disk o DB externa (PostgreSQL, Turso, etc.).

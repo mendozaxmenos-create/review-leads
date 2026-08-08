@@ -395,15 +395,40 @@ Persistencia real: volumen Fly en `/data` o PostgreSQL externo.
 3. Completar secrets que pide `render.yaml`:
    - `GOOGLE_PLACES_API_KEY`
    - `OPENAI_API_KEY`
+   - `NOMINATIM_CONTACT_EMAIL` (opcional)
 4. **Apply** → esperar build Docker (3–8 min)
 
-Variables ya definidas en `render.yaml`: `OUTREACH_SENDER_*`, `DATABASE_PATH=/tmp/review-leads.db`, health `/health`.
+URL típica: `https://review-leads.onrender.com`
+
+Variables ya definidas en `render.yaml`: `OUTREACH_SENDER_*`, `DATABASE_PATH=/tmp/review-leads.db`, health `/health`, `DEMO_PUBLIC_URL`, `DEMO_ACCESS_TOKEN` (auto-generado).
+
+### Demo pública para leads (`/demo`)
+
+1. En Render → Environment → copiá el valor de `DEMO_ACCESS_TOKEN`
+2. Link del pitch (único que compartís):
+   `https://review-leads.onrender.com/demo?k=<DEMO_ACCESS_TOKEN>`
+3. En `/campaign` el campo **URL demo** se completa solo si el server tiene `DEMO_PUBLIC_URL` + token
+4. Sin el `?k=` correcto la demo no arranca
+
+### Keep-alive con UptimeRobot (gratis, para que no duerma)
+
+El plan free de Render duerme ~15 min sin tráfico. Para dejarlo “siempre listo”:
+
+1. https://uptimerobot.com → cuenta free
+2. **Add New Monitor**
+   - Monitor Type: **HTTP(s)**
+   - URL: `https://review-leads.onrender.com/health`
+   - Interval: **5 minutes**
+3. Guardar
+
+UptimeRobot pega cada 5 min → Render no duerme. Costo: $0.
 
 | Qué | Render free |
 |-----|-------------|
 | Costo | $0 |
-| Sleep | Tras ~15 min sin tráfico (~1 min despertar) |
+| Sleep | Tras ~15 min sin tráfico (~1 min despertar) — mitigar con UptimeRobot |
 | SQLite | Efímero en `/tmp` |
+| Demo | `/demo?k=…` con token |
 
 ## Docker local
 
@@ -452,9 +477,10 @@ pip install -r requirements.txt   # si hubo cambios
 
 ## Pendiente / roadmap
 
-- [ ] Reactivar Fly.io (tarjeta) **o** deploy en Render (necesario para `/demo` pública a leads)
+- [x] Deploy en Render free + keep-alive UptimeRobot (`/health` cada 5 min)
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
+- [ ] Proteger `/campaign` y `/admin` con `DASHBOARD_ACCESS_TOKEN` en producción
 - [ ] Email desde web del negocio (Google no expone email)
 - [ ] Batch IA — varias reseñas en una llamada OpenAI
 

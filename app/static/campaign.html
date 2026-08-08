@@ -198,12 +198,23 @@
       <section class="panel campaign-controls">
         <h2>3. Respuestas rápidas (tu WhatsApp)</h2>
         <p class="map-hint">
-          Copiá el texto y pegalo en la charla personal. Opcional: nombre del complejo.
+          Un solo pitch para convertir: copiá, pegá en tu WhatsApp personal. Incluye el link a la demo.
+          Si estás en local, el pitch NO debe usar 127.0.0.1. Configurá DEMO_PUBLIC_URL + DEMO_ACCESS_TOKEN
+          (Render o cloudflared) y el campo se completa solo desde el server.
         </p>
         <div class="actions-row" style="margin-bottom: 1rem">
           <label>
             Nombre del complejo
             <input type="text" id="reply-place-name" placeholder="ej. Amalar Cabañas" style="min-width: 14rem" />
+          </label>
+          <label>
+            URL demo (pública)
+            <input
+              type="url"
+              id="reply-demo-url"
+              placeholder="https://…/demo"
+              style="min-width: 18rem"
+            />
           </label>
         </div>
         <div id="quick-replies" class="quick-replies" aria-label="Respuestas rápidas"></div>
@@ -242,6 +253,6 @@
       <p id="loading-text">Procesando…</p>
     </div>
 
-    <script src="/static/js/campaign.js?v=13"></script>
+    <script src="/static/js/campaign.js?v=15"></script>
   </body>
 </html>

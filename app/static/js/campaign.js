@@ -14,154 +14,26 @@ async function api(path, opts = {}) {
 
 const QUICK_REPLIES = [
   {
-    id: "demo-otros",
-    title: "«Puede ser / cómo funciona en otros» — demo",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
+    id: "pitch",
+    title: "Pitch único — convertir (con demo)",
+    body: `Hola, soy Gustavo de SofIA.
 
-Sí, puede ser — y es justo lo que están usando otros hospedajes: el huésped escribe al WhatsApp del complejo y el bot atiende solo.
+Te armo un bot de WhatsApp para {{nombre}}: el huésped escribe a tu número y el bot atiende solo — disponibilidad, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). Vos recibís el aviso ordenado, sin estar pegado al celular de noche ni el finde.
 
-Te muestro un ejemplo real de cómo queda el chat:
-
-👤 ¿Hay lugar el viernes al domingo para 4?
-🤖 Sí, tenemos disponibilidad. Cabaña para 4: $XX.XXX/noche. ¿La reservamos?
-
-👤 Sí
-🤖 Genial. Necesito nombre, DNI y seña del 30%. Te paso el link de pago.
-
-👤 ¿Horario de check-in?
-🤖 Desde las 15 hs. Check-out hasta las 11.
-
-Eso responde de noche y el finde, sin que estés pegado al celular.
-En el próximo mensaje te paso qué incluye y el valor.`,
-  },
-  {
-    id: "pasame-info",
-    title: "«Pásame la info / lo analizamos»",
-    body: `Perfecto.
-
-Es un bot de WhatsApp para tu hospedaje. El huésped escribe a tu número y el bot responde solo:
-
-• precio y disponibilidad
-• dudas frecuentes (check-in, seña, normas)
-• guía la pre-reserva y te avisa a vos ordenado
-
-Podés probarlo acá (demo interactiva):
+Probá cómo se siente (demo interactiva, 2 minutos):
 {{demo_url}}
 
-Valor: $19.000/mes.
-Si te cierra, el siguiente paso es que me pases precios, reglas y check-in de {{nombre}}.
-¿Seguimos?`,
-  },
-  {
-    id: "link-demo",
-    title: "Link demo interactiva",
-    body: `Si querés verlo en vivo, abrí esta demo y escribí como si fueras un huésped (fechas, precio, reservar):
+Escribí como si fueras un huésped: pedí fechas, elegí cabaña y simulá la seña.
 
-{{demo_url}}
+Valor: $19.000/mes. Lo dejamos funcionando con tus precios, reglas y check-in.
 
-Es una muestra del bot de SofIA. Después lo armamos con los datos de {{nombre}}.`,
-  },
-  {
-    id: "malas-exp",
-    title: "«No he tenido buenas experiencias»",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Te entiendo — hay muchos bots genéricos que contestan mal y generan más lío que ayuda.
-
-Lo nuestro es distinto: lo armamos a medida de {{nombre}} (tus precios, tus reglas, tu tono). No es un bot “de catálogo”: vos validás cómo responde antes de dejarlo solo.
-
-Podés probar una demo acá:
-{{demo_url}}
-
-Valor: $19.000/mes.
-Si querés, lo miramos juntos sin compromiso.
-¿Te parece?`,
-  },
-  {
-    id: "mostrame1",
-    title: "Dijeron «mostrame» — demo (msg 1)",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Te muestro cómo queda el bot. Ejemplo real de chat:
-
-👤 ¿Hay lugar el viernes al domingo para 4?
-🤖 Sí, tenemos disponibilidad. Cabaña para 4: $XX.XXX/noche. ¿La reservamos?
-
-👤 Sí
-🤖 Genial. Necesito nombre, DNI y seña del 30%. Te paso el link de pago.
-
-👤 ¿Horario de check-in?
-🤖 Desde las 15 hs. Check-out hasta las 11.
-
-Eso responde solo, de noche y finde también.`,
-  },
-  {
-    id: "mostrame2",
-    title: "Dijeron «mostrame» — oferta (msg 2)",
-    body: `Incluye:
-• respuestas 24/7 por WhatsApp
-• consultas de precio / disponibilidad
-• pre-reserva + seña
-• vos recibís el aviso ordenado
-
-Cuesta $19.000/mes.
-Si te sirve, lo armamos con tu info (precios, reglas, check-in) en pocos días.
-¿Seguimos con {{nombre}}?`,
-  },
-  {
-    id: "si",
-    title: "Dijeron que sí / contame",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Perfecto. Te resumo rápido:
-
-Es un bot de WhatsApp para tu cabaña: responde consultas 24/7, informa disponibilidad y toma la pre-reserva sin que tengas que estar pegado al celular.
-
-Cuesta $19.000/mes. Lo dejamos funcionando con tu info (precios, reglas, check-in, etc.).
-
-¿Querés que te muestre con un ejemplo cómo quedaría para {{nombre}}?`,
-  },
-  {
-    id: "como",
-    title: "¿Cómo funciona?",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Así de simple:
-
-1) El huésped te escribe por WhatsApp
-2) El bot responde al toque (precios, disponibilidad, dudas frecuentes)
-3) Si quiere reservar, lo guía a confirmar / dejar seña
-4) A vos te llega el aviso ordenado
-
-Todo por $19.000/mes. ¿Te armo una demo corta con el nombre de tu complejo?`,
-  },
-  {
-    id: "precio",
-    title: "Precio / está caro",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Es $19.000/mes, sin setup raro de entrada.
-
-La idea es que no se te escapen consultas de noche/finde: con 1–2 reservas extra al mes ya se paga solo.
-
-Si querés, lo vemos 5 minutos con tu caso y después decidís.`,
-  },
-  {
-    id: "pienso",
-    title: "Lo pienso / después",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Dale, sin problema.
-Si te sirve, mañana te mando 3 capturas de cómo responde el bot a: “¿hay lugar el finde?”, “¿precio?” y “quiero reservar”.
-¿Te las paso?`,
+Si te cierra, respondeme y lo armamos para {{nombre}}.`,
   },
   {
     id: "no",
-    title: "No les interesa",
-    body: `Hola, soy Gustavo, de SofIA Desarrollos Informáticos.
-
-Ningún drama, gracias por responder.
-Si más adelante se complica contestar WhatsApp, acá estoy. Éxitos con {{nombre}}.`,
+    title: "No les interesa (cortesía)",
+    body: `Ningún drama, gracias por responder.
+Si más adelante se complica contestar el WhatsApp, acá estoy. Éxitos con {{nombre}}.`,
   },
 ];
 
@@ -196,6 +68,7 @@ const els = {
   csvFile: document.getElementById("csv-file"),
   quickReplies: document.getElementById("quick-replies"),
   replyPlaceName: document.getElementById("reply-place-name"),
+  replyDemoUrl: document.getElementById("reply-demo-url"),
 };
 
 /** @type {string|null} */
@@ -278,9 +151,29 @@ function placeToken() {
   return name || "tu complejo";
 }
 
+function demoLink() {
+  const custom = (els.replyDemoUrl?.value || "").trim();
+  if (custom) return custom.replace(/\/$/, "");
+  return `${window.location.origin}/demo`;
+}
+
+async function loadShareLink() {
+  try {
+    const data = await api("/api/demo/share-link");
+    if (data?.url && els.replyDemoUrl) {
+      els.replyDemoUrl.value = data.url;
+      renderQuickReplies();
+    } else if (els.replyDemoUrl && !els.replyDemoUrl.value) {
+      els.replyDemoUrl.value = "";
+      els.replyDemoUrl.placeholder = "Configurá DEMO_PUBLIC_URL en el server";
+    }
+  } catch {
+    /* local sin endpoint ok */
+  }
+}
+
 function fillReply(template) {
-  const demoUrl = `${window.location.origin}/demo`;
-  return template.replaceAll("{{nombre}}", placeToken()).replaceAll("{{demo_url}}", demoUrl);
+  return template.replaceAll("{{nombre}}", placeToken()).replaceAll("{{demo_url}}", demoLink());
 }
 
 async function copyText(text, btn) {
@@ -858,12 +751,17 @@ document.getElementById("upload-btn").addEventListener("click", uploadCsv);
 document.getElementById("dry-btn").addEventListener("click", () => sendWa({ dryRun: true }));
 document.getElementById("live-btn").addEventListener("click", () => sendWa({ dryRun: false }));
 els.replyPlaceName?.addEventListener("input", renderQuickReplies);
+els.replyDemoUrl?.addEventListener("input", renderQuickReplies);
 els.kpiClearBtn?.addEventListener("click", clearKpiFilter);
 els.fabHome?.addEventListener("click", goHome);
 els.basesSelect?.addEventListener("change", onBaseSelectChange);
 els.sentZonesSelect?.addEventListener("change", onSentZoneSelectChange);
 window.addEventListener("scroll", () => updateFab(), { passive: true });
 
+if (els.replyDemoUrl && !els.replyDemoUrl.value) {
+  els.replyDemoUrl.placeholder = "https://tu-app.onrender.com/demo?k=…";
+}
 renderQuickReplies();
+loadShareLink();
 refresh();
 setInterval(refresh, 30000);
