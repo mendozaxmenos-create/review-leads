@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     demo_access_token: str = ""  # legacy / ignorado: la demo es pública
     dashboard_access_token: str = ""  # si está seteado, /campaign y /admin exigen ?k= o X-Dashboard-Token
 
+    # Avisos al dueño cuando un lead escribe (Prioridad / humano)
+    alert_on_human_reply: bool = True
+    alert_whatsapp_to: str = ""  # ej. whatsapp:+549261... o +549261...
+    alert_email_to: str = ""  # ej. vos@gmail.com
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # default = smtp_user
+    alert_dashboard_url: str = "http://127.0.0.1:8000/campaign"
+
 
 def outreach_sender_signature() -> str:
     name = settings.outreach_sender_name.strip()

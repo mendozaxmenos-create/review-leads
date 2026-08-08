@@ -158,6 +158,19 @@ Inbound WhatsApp se clasifica en `app/services/reply_classify.py`:
 - Hilos con humano (o retomó después del auto) **siguen en Prioridad** aunque estén en follow-up, para no perderlos
 - Auto-replies tipo hotel (“en un momento respondemos…”) se marcan como auto, no como humano
 
+**Avisos al dueño (KPI Prioridad / humano)**
+
+Cuando un inbound pasa a «Por contestar (humano)» (primera vez del hilo, no cada mensaje), SofIA puede avisarte:
+
+| Variable | Uso |
+|----------|-----|
+| `ALERT_WHATSAPP_TO` | Tu celular (mismo sender Twilio; fuera de ventana 24h puede fallar) |
+| `ALERT_EMAIL_TO` + `SMTP_*` | Email (más fiable; Gmail = App Password) |
+| `ALERT_DASHBOARD_URL` | Link en el mensaje |
+| `ALERT_ON_HUMAN_REPLY` | `false` para apagar |
+
+Probar: `POST /api/campaigns/mendoza-cabanas/alerts/test` (con el servidor local que recibe el webhook). El aviso solo dispara si Twilio llega a esa instancia (túnel/ngrok).
+
 **Acciones del dashboard**
 
 - Upload/sync CSV, lotes dry-run/live (**Enviar lote** = hasta N pendientes; saltea ya enviados)

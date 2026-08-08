@@ -566,3 +566,19 @@ async def discard_lead(body: dict) -> dict:
         notes=(note + (" | " if note else "") + discard_note),
     )
     return {"ok": True, "place_id": place_id, "status": "discarded"}
+
+
+@router.post("/mendoza-cabanas/alerts/test")
+async def test_owner_alert() -> dict:
+    """Envía un aviso de prueba a ALERT_WHATSAPP_TO / ALERT_EMAIL_TO."""
+    from app.services.owner_alerts import notify_owner_human_reply
+
+    result = notify_owner_human_reply(
+        place_name="Prueba SofIA",
+        zone="test",
+        base="test",
+        phone="+54900000000",
+        body="Este es un aviso de prueba del KPI Prioridad (humano).",
+        thread_label="Prueba de alerta",
+    )
+    return {"ok": True, "result": result}

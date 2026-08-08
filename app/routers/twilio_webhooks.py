@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from fastapi import APIRouter, Form, Request, Response
 
 from app.db.store import get_store
 from app.services.mendoza_campaign import CAMPAIGN_ID
+from app.services.owner_alerts import notify_owner_human_reply, should_alert_human_reply
 from app.services.reply_classify import (
     classify_inbound_body,
     classify_inbound_thread,
@@ -15,6 +17,7 @@ from app.services.reply_classify import (
 )
 
 router = APIRouter(prefix="/api/twilio", tags=["twilio"])
+logger = logging.getLogger(__name__)
 
 
 def _digits(phone: str) -> str:
@@ -34,6 +37,7 @@ async def whatsapp_inbound(
 
     No responde por Twilio (ahorra costo). Marca CRM responded y guarda el mensaje.
     Seguí la charla desde tu WhatsApp personal (handoff).
+    Si el hilo pasa a Prioridad (humano), avisa por ALERT_WHATSAPP_TO / ALERT_EMAIL_TO.
     """
     store = get_store()
     store.init()
@@ -58,6 +62,7 @@ async def whatsapp_inbound(
     if lead_row:
         kind = classify_inbound_body(body)
         note = (lead_row.get("notes") or "").strip()
+        lead = lead_row.get("lead") or {}
 
         # Thread context (incl. este mensaje ya logueado)
         prior = store.list_campaign_messages(
@@ -91,6 +96,20 @@ async def whatsapp_inbound(
                 status="responded",
                 notes=(note + (" | " if note else "") + reply_note),
             )
+
+        if should_alert_human_reply(inbound_bodies):
+            try:
+                result = notify_owner_human_reply(
+                    place_name=str(lead.get("place_name") or place_id or "Lead"),
+                    zone=str(lead.get("zone") or ""),
+                    base=str(lead.get("base") or ""),
+                    phone=str(lead.get("phone") or from_raw.replace("whatsapp:", "")),
+                    body=body,
+                    thread_label=str(thread.get("thread_label") or "Respuesta humana"),
+                )
+                logger.info("owner alert: %s", result)
+            except Exception:
+                logger.exception("owner alert failed")
 
     # Empty TwiML = no auto-reply (no cobro de respuesta automática)
     return Response(
