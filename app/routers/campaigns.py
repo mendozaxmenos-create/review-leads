@@ -423,6 +423,7 @@ async def send_mendoza_wa(body: dict | None = None) -> dict:
             skip_already_sent=bool(payload.get("skip_already_sent", True)),
             mark_contacted=bool(payload.get("mark_contacted", True)),
             update_crm_on_dry_run=bool(payload.get("update_crm_on_dry_run", False)),
+            base_name=(payload.get("base_name") or payload.get("base") or "").strip() or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

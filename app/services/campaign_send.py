@@ -13,6 +13,7 @@ from app.services.twilio_whatsapp import (
     TwilioWhatsAppService,
     extract_zone_from_reason,
     normalize_whatsapp_number,
+    resolve_template_region,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -110,7 +111,7 @@ async def run_send_campaign(
         place_id = str(lead.get("place_id") or "")
         place_name = str(lead.get("place_name") or "")
         phone = str(lead.get("phone") or "")
-        zone = extract_zone_from_reason(lead.get("reason"))
+        zone = resolve_template_region(lead)
         result = twilio.send_template(
             to_phone=phone,
             place_name=place_name,

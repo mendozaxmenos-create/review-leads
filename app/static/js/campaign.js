@@ -757,6 +757,7 @@ async function sendWa({ dryRun }) {
         limit,
         skip_already_sent: true,
         mark_contacted: true,
+        base_name: (els.basesSelect?.value || els.baseName?.value || "").trim() || undefined,
       }),
     });
     els.summary.hidden = false;

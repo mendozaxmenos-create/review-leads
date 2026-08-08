@@ -16,6 +16,7 @@ from app.services.twilio_whatsapp import (
     TwilioWhatsAppService,
     extract_zone_from_reason,
     normalize_whatsapp_number,
+    resolve_template_region,
 )
 
 CAMPAIGN_ID = "mendoza-cabanas-wa"
@@ -26,6 +27,28 @@ def csv_path_default() -> Path:
     if DEFAULT_READY_CSV.exists():
         return DEFAULT_READY_CSV
     return LEGACY_READY_CSV
+
+
+def csv_path_for_base(base_name: str | None) -> Path:
+    """CSV de envío según base seleccionada (no pisa Mendoza al usar Córdoba)."""
+    base = (base_name or "").strip()
+    if not base or base.casefold() == "mendoza":
+        return csv_path_default()
+    export = Path(__file__).resolve().parents[2] / "data" / "exports"
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in base)[:40]
+    candidates = [
+        export / f"campaign-{base}.csv",
+        export / f"campaign-{safe}.csv",
+    ]
+    if "cordoba" in base.casefold() or "córdoba" in base.casefold():
+        candidates.insert(0, export / "cordoba-cabanas-etl-clean.csv")
+        candidates.insert(1, export / "campaign-Córdoba.csv")
+    for path in candidates:
+        if path.exists():
+            return path
+    raise FileNotFoundError(
+        f"No hay CSV para la base «{base}». Esperado p.ej. data/exports/campaign-{safe}.csv"
+    )
 
 
 def sync_etl_clean_to_crm(
@@ -400,8 +423,12 @@ async def run_mendoza_wa_campaign(
     skip_already_sent: bool = True,
     mark_contacted: bool = True,
     update_crm_on_dry_run: bool = False,
+    base_name: str | None = None,
 ) -> SendCampaignResponse:
-    """Envía plantilla a leads del CSV limpio; loguea y marca CRM."""
+    """Envía plantilla a leads del CSV limpio; loguea y marca CRM.
+
+    {{1}}=nombre del complejo, {{2}}=zona (o base) del lead — nunca hardcode Mendoza.
+    """
     twilio = TwilioWhatsAppService()
     if not dry_run:
         if not twilio.send_enabled:
@@ -414,7 +441,14 @@ async def run_mendoza_wa_campaign(
                 "No se puede hacer blast live desde Sandbox US. Configurá TWILIO_WHATSAPP_FROM=+54…"
             )
 
-    leads = load_ready_csv(csv_path_default(), limit=None)
+    selected_base = (base_name or "").strip() or None
+    default_base = selected_base or "Mendoza"
+    csv_path = csv_path_for_base(selected_base)
+    leads = load_ready_csv(csv_path, limit=None)
+    for row in leads:
+        if not (row.get("base") or "").strip():
+            row["base"] = default_base
+
     store = get_store()
     store.init()
 
@@ -436,6 +470,16 @@ async def run_mendoza_wa_campaign(
         queue.append(row)
 
     crm_meta = store.get_saved_leads_by_places([r.get("place_id", "") for r in queue if r.get("place_id")])
+    for row in queue:
+        info = crm_meta.get(row.get("place_id") or "")
+        if not info:
+            continue
+        crm_lead = info.get("lead") or {}
+        if not (row.get("zone") or "").strip() and (crm_lead.get("zone") or "").strip():
+            row["zone"] = crm_lead["zone"]
+        if not (row.get("base") or "").strip() and (crm_lead.get("base") or "").strip():
+            row["base"] = crm_lead["base"]
+
     if not dry_run:
         filtered = []
         for row in queue:
@@ -458,12 +502,12 @@ async def run_mendoza_wa_campaign(
         place_id = str(lead.get("place_id") or "")
         place_name = str(lead.get("place_name") or "")
         phone = str(lead.get("phone") or lead.get("phone_e164") or "")
-        zone = (lead.get("zone") or "").strip() or extract_zone_from_reason(lead.get("reason"))
+        region = resolve_template_region(lead)
 
         result = twilio.send_template(
             to_phone=phone,
             place_name=place_name,
-            zone=zone or "Mendoza",
+            zone=region,
             dry_run=dry_run,
         )
 
@@ -472,7 +516,7 @@ async def run_mendoza_wa_campaign(
             place_id=place_id,
             place_name=place_name,
             phone=phone,
-            zone=zone,
+            zone=region,
             dry_run=result.dry_run,
             ok=result.ok,
             twilio_sid=result.sid,
@@ -485,7 +529,7 @@ async def run_mendoza_wa_campaign(
                 place_id=place_id,
                 phone=phone,
                 direction="outbound",
-                body=f"[plantilla] {place_name} / {zone or 'Mendoza'} / $19.000",
+                body=f"[plantilla] {place_name} / {region} / $19.000",
                 twilio_sid=result.sid,
             )
 
@@ -512,13 +556,14 @@ async def run_mendoza_wa_campaign(
                         "place_id": place_id,
                         "phone": phone,
                         "address": lead.get("address"),
-                        "reason": lead.get("reason") or f"[{zone}] Campaña Mendoza",
+                        "reason": lead.get("reason") or f"[{region}] Campaña {default_base}",
                         "review_text": "",
                         "lead_fit": "low",
                         "recommended_project_id": "booking-bot",
                         "recommended_project_name": "Bot de reservas",
                         "campaign": CAMPAIGN_TAG,
-                        "zone": zone,
+                        "zone": region,
+                        "base": lead.get("base") or default_base,
                         "business_type_label": lead.get("business_type_label"),
                     },
                     search_history_id=None,
@@ -558,7 +603,8 @@ async def run_mendoza_wa_campaign(
 
     mode = "DRY-RUN" if dry_run else "LIVE"
     summary = (
-        f"Campaña {CAMPAIGN_ID} {mode}: {sent_ok}/{len(queue)} OK, {failed} fallidos, "
+        f"Campaña {CAMPAIGN_ID} {mode} base={default_base} ({csv_path.name}): "
+        f"{sent_ok}/{len(queue)} OK, {failed} fallidos, "
         f"{crm_updated} CRM contacted"
         + (f", {skipped_dup} omitidos (ya enviados en alguna base)" if skipped_dup else "")
         + "."

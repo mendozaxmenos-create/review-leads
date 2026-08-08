@@ -40,12 +40,24 @@ def normalize_whatsapp_number(phone: str) -> str | None:
 
 
 def extract_zone_from_reason(reason: str | None) -> str:
-    """Usa el tag [Zona] que agrega la campaña Mendoza."""
+    """Usa el tag [Zona] del reason (ej. [Cosquín] …). Vacío si no hay tag."""
     text = reason or ""
     m = re.match(r"\[([^\]]+)\]", text.strip())
     if m:
         return m.group(1).strip()
-    return "Mendoza"
+    return ""
+
+
+def resolve_template_region(lead: dict | None, *, fallback: str = "tu zona") -> str:
+    """{{2}} de la plantilla: zona del lead, si no la base (Córdoba/Mendoza), si no fallback genérico."""
+    row = lead or {}
+    zone = (row.get("zone") or "").strip() or extract_zone_from_reason(row.get("reason"))
+    if zone:
+        return zone[:60]
+    base = (row.get("base") or "").strip()
+    if base:
+        return base[:60]
+    return (fallback or "tu zona")[:60]
 
 
 class TwilioWhatsAppService:
@@ -127,7 +139,7 @@ class TwilioWhatsAppService:
                 content_variables=json.dumps(
                     {
                         "1": (place_name or "hola")[:80],
-                        "2": (zone or "Mendoza")[:60],
+                        "2": (zone or "tu zona")[:60],
                     },
                     ensure_ascii=False,
                 ),
