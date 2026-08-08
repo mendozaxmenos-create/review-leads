@@ -105,6 +105,15 @@ function selectedBaseName() {
   return (els.basesSelect?.value || els.baseName?.value || "").trim();
 }
 
+function rememberBase(base) {
+  const v = (base || "").trim();
+  if (v) sessionStorage.setItem("sofia_campaign_base", v);
+}
+
+function rememberedBase() {
+  return (sessionStorage.getItem("sofia_campaign_base") || "").trim();
+}
+
 function filterRowsByBase(rows) {
   const base = selectedBaseName();
   const list = Array.isArray(rows) ? rows : [];
@@ -286,6 +295,7 @@ function renderStats(d) {
 
 function renderBaseDropdowns(d) {
   const bases = Array.isArray(d.bases) ? d.bases : [];
+  const prev = rememberedBase() || selectedBaseName();
 
   if (els.basesSelect) {
     if (!bases.length) {
@@ -299,6 +309,10 @@ function renderBaseDropdowns(d) {
               `<option value="${escapeHtml(b.base)}">${escapeHtml(b.base)} · ${b.leads} leads · ${b.sent} enviados · ${b.pending} pend.</option>`
           )
           .join("");
+      if (prev && bases.some((b) => b.base === prev)) {
+        els.basesSelect.value = prev;
+        if (els.baseName) els.baseName.value = prev;
+      }
     }
   }
 
@@ -309,7 +323,16 @@ function renderBaseDropdowns(d) {
   }
   if (els.basesHint) {
     els.basesHint.textContent =
-      "Primero elegí una base; después vas a ver solo las zonas contactadas de esa base.";
+      "Elegí Mendoza o Córdoba: el inbox (Prioridad / auto-reply) y el envío usan esa base.";
+  }
+  // Re-filtrar inbox si ya hay datos cacheados
+  if (cachedResponded.length || cachedFollowUp.length) {
+    renderResponded();
+    renderFollowUp();
+  }
+  // Cargar zonas de la base restaurada
+  if (els.basesSelect?.value) {
+    void onBaseSelectChange();
   }
 }
 
@@ -322,12 +345,13 @@ async function onBaseSelectChange() {
     }
     if (els.basesHint) {
       els.basesHint.textContent =
-        "Primero elegí una base; después vas a ver solo las zonas contactadas de esa base.";
+        "Elegí Mendoza o Córdoba: el inbox (Prioridad / auto-reply) y el envío usan esa base.";
     }
     renderResponded();
     renderFollowUp();
     return;
   }
+  rememberBase(val);
   if (els.baseName) els.baseName.value = val;
   renderResponded();
   renderFollowUp();
@@ -626,22 +650,27 @@ function renderResponded(respondedRows, followUpRows = []) {
 
   renderLeadActionRows(priorityRows, els.priorityBody, {
     emptyText: base
-      ? `Ningún humano pendiente en «${base}» (Córdoba recién enviada suele caer primero en auto-reply)`
-      : "Nadie humano pendiente — cuando alguien retome después del bot, aparece acá",
+      ? `Ningún humano pendiente en «${base}»${
+          base.toLowerCase().includes("córdoba") || base.toLowerCase().includes("cordoba")
+            ? " — por ahora solo auto-replies; cuando escriba una persona aparece acá"
+            : ""
+        }`
+      : "Elegí una base arriba (Mendoza / Córdoba). Sin base, se mezclan todas.",
     showHandoff: true,
   });
   renderLeadActionRows(autoOnly, els.respondedBody, {
-    emptyText: base ? `Ningún auto-reply pendiente en «${base}»` : "Ningún auto-reply pendiente",
+    emptyText: base ? `Ningún auto-reply pendiente en «${base}»` : "Elegí una base para filtrar auto-replies",
     showHandoff: true,
   });
   if (els.prioritySection) {
     els.prioritySection.classList.toggle("has-items", priorityRows.length > 0);
     const title = els.prioritySection.querySelector("h2");
     if (title) {
+      const scope = base ? ` · ${base}` : " · todas las bases";
       title.textContent =
         priorityRows.length > 0
-          ? `Prioridad — escribió un humano (${priorityRows.length})${baseSuffix}`
-          : `Prioridad — escribió un humano${baseSuffix}`;
+          ? `Prioridad — escribió un humano (${priorityRows.length})${scope}`
+          : `Prioridad — escribió un humano${scope}`;
     }
   }
   const autoHeading = els.respondedBody?.closest("section")?.querySelector("h2");
