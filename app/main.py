@@ -87,8 +87,9 @@ async def demo_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "demo.html")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health() -> dict[str, str]:
+    """Health + keep-alive (UptimeRobot usa HEAD por defecto)."""
     return {"status": "ok"}
 
 
