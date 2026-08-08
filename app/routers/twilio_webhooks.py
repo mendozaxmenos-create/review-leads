@@ -7,7 +7,12 @@ import re
 from fastapi import APIRouter, Form, Request, Response
 
 from app.db.store import get_store
-from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
+from app.services.mendoza_campaign import CAMPAIGN_ID
+from app.services.reply_classify import (
+    classify_inbound_body,
+    classify_inbound_thread,
+    note_for_inbound,
+)
 
 router = APIRouter(prefix="/api/twilio", tags=["twilio"])
 
@@ -50,18 +55,46 @@ async def whatsapp_inbound(
         twilio_sid=sid,
     )
 
-    if lead_row and lead_row.get("status") in ("new", "contacted"):
+    if lead_row:
+        kind = classify_inbound_body(body)
         note = (lead_row.get("notes") or "").strip()
-        reply_note = f"Respondió WhatsApp: {body[:120]}"
-        store.update_saved_lead(
-            lead_row["id"],
-            status="responded",
-            notes=(note + (" | " if note else "") + reply_note),
+
+        # Thread context (incl. este mensaje ya logueado)
+        prior = store.list_campaign_messages(
+            CAMPAIGN_ID, place_id=place_id, limit=30
         )
+        inbound_bodies = [
+            m["body"]
+            for m in reversed(prior)
+            if m.get("direction") == "inbound"
+        ]
+        thread = classify_inbound_thread(inbound_bodies)
+        reply_note = note_for_inbound(kind, body, thread_kind=thread["thread_kind"])
+
+        if kind == "stop":
+            store.update_saved_lead(
+                lead_row["id"],
+                status="discarded",
+                notes=(note + (" | " if note else "") + reply_note),
+            )
+        elif lead_row.get("status") in ("new", "contacted", "follow_up"):
+            # Auto o humano: entra a por-contestar; el UI explica el tipo
+            store.update_saved_lead(
+                lead_row["id"],
+                status="responded",
+                notes=(note + (" | " if note else "") + reply_note),
+            )
+        elif lead_row.get("status") == "responded":
+            # Refrescar nota con el último tipo (humano retomó, otro auto, etc.)
+            store.update_saved_lead(
+                lead_row["id"],
+                status="responded",
+                notes=(note + (" | " if note else "") + reply_note),
+            )
 
     # Empty TwiML = no auto-reply (no cobro de respuesta automática)
     return Response(
-        content="<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
+        content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
         media_type="application/xml",
     )
 
@@ -73,5 +106,4 @@ async def whatsapp_status(
     To: str = Form(default=""),
 ) -> dict[str, str]:
     """Status callback opcional (queued/sent/delivered/failed)."""
-    # Por ahora solo ack; se puede enriquecer el log de campaign_sends
     return {"ok": "true", "sid": MessageSid, "status": MessageStatus}

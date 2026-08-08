@@ -383,6 +383,7 @@ class LeadStatus(str, Enum):
     NEW = "new"
     CONTACTED = "contacted"
     RESPONDED = "responded"
+    FOLLOW_UP = "follow_up"
     CLOSED = "closed"
     DISCARDED = "discarded"
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.data.ar_locations import MENDOZA_CABANAS_ZONES, list_mendoza_cabanas_zones
 from app.data.services import get_profile
@@ -265,6 +265,36 @@ async def mendoza_wa_dashboard() -> dict:
     return campaign_dashboard_stats()
 
 
+@router.get("/mendoza-cabanas/bases/{base_name}/sent-zones")
+async def mendoza_base_sent_zones(base_name: str) -> dict:
+    """Zonas ya contactadas de una base concreta."""
+    from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
+
+    store = get_store()
+    store.init()
+    base = (base_name or "").strip() or "Mendoza"
+    zones = store.list_sent_zones_for_base(
+        campaign_id=CAMPAIGN_ID,
+        campaign_tag=CAMPAIGN_TAG,
+        base=base,
+        live_only=True,
+    )
+    return {"base": base, "zones": zones, "count": len(zones)}
+
+
+@router.get("/mendoza-cabanas/kpi/{kpi}")
+async def mendoza_wa_kpi_leads(
+    kpi: str, limit: int = 500, zone: str | None = None
+) -> dict:
+    """Contactos asociados a un KPI del dashboard (clic en la card)."""
+    from app.services.mendoza_campaign import list_kpi_leads
+
+    try:
+        return list_kpi_leads(kpi, limit=min(limit, 2000), zone=zone)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/mendoza-cabanas/sends")
 async def mendoza_wa_sends(limit: int = 100, live_only: bool = False) -> list[dict]:
     from app.services.mendoza_campaign import CAMPAIGN_ID
@@ -316,38 +346,76 @@ async def send_mendoza_wa(body: dict | None = None) -> dict:
 
 
 @router.post("/mendoza-cabanas/upload")
-async def upload_mendoza_csv(file: UploadFile = File(...)) -> dict:
-    """Sube un CSV de campaña y lo sincroniza al CRM."""
+async def upload_mendoza_csv(
+    file: UploadFile = File(...),
+    base_name: str = Form(default="Mendoza"),
+) -> dict:
+    """Sube un CSV de campaña y lo sincroniza al CRM (con nombre de base/región)."""
     from app.services.mendoza_campaign import CAMPAIGN_TAG, sync_etl_clean_to_crm
 
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Subí un archivo .csv")
     export_dir = Path(__file__).resolve().parents[2] / "data" / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
-    dest = export_dir / "mendoza-cabanas-etl-clean.csv"
+    safe_base = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in (base_name or "base").strip())[:40]
+    dest = export_dir / f"campaign-{safe_base or 'base'}.csv"
+    # Mantener también el path “clean” como activo para el envío
+    active = export_dir / "mendoza-cabanas-etl-clean.csv"
     content = await file.read()
     dest.write_bytes(content)
-    result = sync_etl_clean_to_crm(csv_path=dest)
+    active.write_bytes(content)
+    result = sync_etl_clean_to_crm(csv_path=active, base_name=(base_name or "Mendoza").strip() or "Mendoza")
     result["campaign_tag"] = CAMPAIGN_TAG
+    result["saved_as"] = str(dest)
     return result
 
 
 @router.get("/mendoza-cabanas/responded")
 async def list_responded(limit: int = 100) -> list[dict]:
+    return await _list_campaign_status_leads("responded", limit)
+
+
+@router.get("/mendoza-cabanas/follow-up")
+async def list_follow_up(limit: int = 100) -> list[dict]:
+    """Leads que ya contestaste vos (seguimiento fuera de Twilio)."""
+    return await _list_campaign_status_leads("follow_up", limit)
+
+
+async def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
     from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
+    from app.services.reply_classify import classify_inbound_body, classify_inbound_thread
 
     store = get_store()
     store.init()
-    rows = store.list_responded_campaign_leads(CAMPAIGN_TAG, limit=min(limit, 500))
+    rows = store.list_campaign_leads_by_status(CAMPAIGN_TAG, status, limit=min(limit, 500))
     out = []
     for r in rows:
         lead = r["lead"]
         msgs = store.list_campaign_messages(
-            CAMPAIGN_ID, place_id=r["place_id"], limit=5
+            CAMPAIGN_ID, place_id=r["place_id"], limit=40
         )
-        last_in = next((m for m in msgs if m["direction"] == "inbound"), None)
+        inbound = [m for m in reversed(msgs) if m.get("direction") == "inbound"]
+        thread = classify_inbound_thread([m.get("body") for m in inbound])
+        last_in = inbound[-1] if inbound else None
         phone = lead.get("phone") or ""
         digits = "".join(ch for ch in phone if ch.isdigit())
+        inbound_replies = []
+        for m in inbound:
+            body = (m.get("body") or "").strip()
+            kind = classify_inbound_body(body)
+            inbound_replies.append(
+                {
+                    "body": body,
+                    "kind": kind,
+                    "kind_label": {
+                        "auto_reply": "Auto-reply (bot)",
+                        "human": "Humano",
+                        "stop": "Opt-out / STOP",
+                        "empty": "Sin texto",
+                    }.get(kind, kind),
+                    "created_at": m.get("created_at"),
+                }
+            )
         out.append(
             {
                 "id": r["id"],
@@ -359,11 +427,29 @@ async def list_responded(limit: int = 100) -> list[dict]:
                 "notes": r["notes"],
                 "updated_at": r["updated_at"],
                 "last_reply": (last_in or {}).get("body"),
+                "inbound_replies": inbound_replies,
+                "reply_thread_kind": thread["thread_kind"],
+                "reply_thread_label": thread["thread_label"],
+                "reply_last_kind": thread["last_kind"],
+                "reply_last_kind_label": thread["last_kind_label"],
+                "reply_needs_you": thread["needs_you"],
+                "reply_waiting_human": thread["waiting_human_possible"],
+                "reply_inbound_count": thread["inbound_count"],
+                "reply_priority": thread["priority"],
                 "wa_me": f"https://wa.me/{digits}" if digits else None,
                 "mailto": f"mailto:{lead['email']}" if lead.get("email") else None,
             }
         )
-    return out
+    # Humanos / retomaron primero; solo-auto después (aún pueden retomar)
+    by_pri: dict[int, list[dict]] = {}
+    for item in out:
+        by_pri.setdefault(int(item.get("reply_priority", 9)), []).append(item)
+    ordered: list[dict] = []
+    for pri in sorted(by_pri):
+        bucket = by_pri[pri]
+        bucket.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+        ordered.extend(bucket)
+    return ordered
 
 
 @router.get("/mendoza-cabanas/messages")
@@ -377,7 +463,7 @@ async def list_messages(place_id: str | None = None, limit: int = 100) -> list[d
 
 @router.post("/mendoza-cabanas/handoff")
 async def mark_handoff(body: dict) -> dict:
-    """Marca que seguís la conversación fuera de Twilio (tu WhatsApp / email)."""
+    """Marca que ya contestaste: pasa a En seguimiento (fuera de Twilio)."""
     place_id = (body or {}).get("place_id")
     channel = (body or {}).get("channel") or "whatsapp_personal"
     if not place_id:
@@ -388,10 +474,32 @@ async def mark_handoff(body: dict) -> dict:
     if not meta:
         raise HTTPException(status_code=404, detail="Lead no encontrado")
     note = (meta.get("notes") or "").strip()
-    handoff = f"Handoff {channel} (fuera de Twilio)"
+    handoff = f"Ya contesté vía {channel}"
     store.update_saved_lead(
         meta["saved_lead_id"],
-        status=meta["status"] if meta["status"] == "responded" else "responded",
+        status="follow_up",
         notes=(note + (" | " if note else "") + handoff),
     )
-    return {"ok": True, "place_id": place_id, "channel": channel}
+    return {"ok": True, "place_id": place_id, "channel": channel, "status": "follow_up"}
+
+
+@router.post("/mendoza-cabanas/discard")
+async def discard_lead(body: dict) -> dict:
+    """STOP / no interesado: sale de Contestaron y En seguimiento."""
+    place_id = (body or {}).get("place_id")
+    reason = ((body or {}).get("reason") or "STOP / no interesado").strip()
+    if not place_id:
+        raise HTTPException(status_code=400, detail="place_id requerido")
+    store = get_store()
+    store.init()
+    meta = store.get_saved_leads_by_places([place_id]).get(place_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    note = (meta.get("notes") or "").strip()
+    discard_note = f"Descartado: {reason}"
+    store.update_saved_lead(
+        meta["saved_lead_id"],
+        status="discarded",
+        notes=(note + (" | " if note else "") + discard_note),
+    )
+    return {"ok": True, "place_id": place_id, "status": "discarded"}

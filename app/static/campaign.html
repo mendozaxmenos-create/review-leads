@@ -17,12 +17,13 @@
       <div class="header-row">
         <div class="brand-block">
           <p class="brand-mark">SofIA</p>
-          <h1>Campaña Mendoza · cabañas</h1>
+          <h1>Campaña · cabañas</h1>
           <p class="brand-tagline">
             Subí la base → Twilio manda el primer mensaje → cuando contestan, seguís en tu WhatsApp
           </p>
         </div>
         <div class="header-actions">
+          <a href="/demo" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Demo bot</a>
           <button type="button" class="btn btn-secondary btn-sm" id="refresh-btn">Actualizar</button>
           <a href="/admin" class="btn btn-secondary btn-sm">CRM</a>
           <a href="/" class="btn btn-secondary btn-sm">← Búsqueda</a>
@@ -32,11 +33,36 @@
 
     <main class="admin-main">
       <section class="admin-stats" id="stats-row" aria-label="KPIs campaña"></section>
+      <p class="map-hint" style="margin-top: -0.5rem">
+        Tocá un KPI para ver esos contactos (mismo formato que Prioridad). Tocá de nuevo o «Cerrar» para volver.
+      </p>
 
       <section class="panel campaign-controls">
         <h2>1. Base</h2>
-        <p class="map-hint">Mendoza limpia ya está cargada. Podés subir otro CSV (mismo formato) si hace falta.</p>
+        <p class="map-hint">
+          Mendoza ya está cargada. Podés subir otra base (Bariloche, Córdoba, etc.). Si el mismo
+          negocio o teléfono ya recibió WhatsApp en cualquier base, <strong>no se reenvía</strong>.
+        </p>
         <div class="actions-row">
+          <label>
+            Bases en CRM
+            <select id="bases-select" style="min-width: 14rem">
+              <option value="">Cargando…</option>
+            </select>
+          </label>
+          <label id="sent-zones-wrap" hidden>
+            Zonas ya contactadas (de esta base)
+            <select id="sent-zones-select" style="min-width: 14rem">
+              <option value="">Elegí una base primero</option>
+            </select>
+          </label>
+        </div>
+        <p class="map-hint" id="bases-hint">Primero elegí una base; después vas a ver solo las zonas contactadas de esa base.</p>
+        <div class="actions-row">
+          <label>
+            Nombre de la base (al subir)
+            <input type="text" id="base-name" placeholder="ej. Bariloche cabañas" value="Mendoza" style="min-width: 12rem" />
+          </label>
           <input type="file" id="csv-file" accept=".csv" />
           <button type="button" class="btn btn-secondary" id="upload-btn">Subir CSV</button>
           <button type="button" class="btn btn-secondary" id="sync-btn">Re-sync CSV actual → CRM</button>
@@ -44,54 +70,135 @@
       </section>
 
       <section class="panel campaign-controls">
-        <h2>2. Envío automático (Twilio)</h2>
+        <h2>2. Envío Twilio (primer contacto)</h2>
         <p class="map-hint" id="blockers"></p>
         <p class="map-hint" id="webhook-hint"></p>
         <div class="actions-row">
           <label>
-            Cantidad por lote
+            Cantidad de este lote
             <input type="number" id="batch-size" min="1" max="250" value="10" style="width: 5rem" />
           </label>
-          <button type="button" class="btn btn-secondary" id="dry-btn">Probar dry-run</button>
+          <button type="button" class="btn btn-secondary" id="dry-btn">Probar dry-run (no manda)</button>
           <button type="button" class="btn btn-primary" id="live-btn" disabled>
             Enviar lote vía Twilio
           </button>
         </div>
         <p class="map-hint">
-          Twilio solo para el <strong>primer contacto</strong>. Cuando responden, abrís la charla en tu WhatsApp
-          personal (gratis para vos) — no sigas respondiendo por Twilio.
+          <strong>Qué hace «Enviar lote»:</strong> manda la plantilla de WhatsApp a hasta
+          <em>N</em> leads pendientes (el número de arriba), de a uno, con pausa entre cada uno.
+          Omite a quienes ya fueron enviados (cualquier base) o ya contestaron.
+          <strong>Dry-run</strong> simula sin cobrar ni mandar. Twilio = solo el primer mensaje.
         </p>
       </section>
 
       <div class="error-banner" id="error" role="alert"></div>
       <div class="summary-box" id="summary" hidden></div>
 
-      <section class="admin-table-wrap panel">
-        <h2>Contestaron — seguir fuera de Twilio</h2>
-        <p class="map-hint" id="handoff-hint"></p>
+      <section class="admin-table-wrap panel panel-priority has-items" id="kpi-view-panel" hidden>
+        <div class="header-row" style="align-items: baseline; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem">
+          <h2 id="kpi-view-title" style="margin: 0">Vista KPI</h2>
+          <button type="button" class="btn btn-sm btn-secondary" id="kpi-clear-btn">Cerrar · volver a KPIs</button>
+        </div>
+        <p class="map-hint" id="kpi-view-hint">Contactos de este indicador.</p>
         <div class="admin-table-scroll">
           <table class="admin-table">
             <thead>
               <tr>
                 <th>Negocio</th>
                 <th>Zona</th>
+                <th>Tipo</th>
                 <th>Última respuesta</th>
                 <th>Acciones</th>
               </tr>
             </thead>
-            <tbody id="responded-tbody">
+            <tbody id="kpi-view-tbody">
               <tr>
-                <td colspan="4" class="admin-empty">Nadie respondió todavía</td>
+                <td colspan="5" class="admin-empty">Elegí un KPI arriba</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
+      <div id="workflow-panels">
+        <section class="admin-table-wrap panel panel-priority" id="priority-section">
+          <h2>Prioridad — escribió un humano</h2>
+          <p class="map-hint">
+            Respuestas de personas (o humano después del bot). Atendelos primero.
+          </p>
+          <div class="admin-table-scroll">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Negocio</th>
+                  <th>Zona</th>
+                  <th>Tipo</th>
+                  <th>Última respuesta</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="priority-tbody">
+                <tr>
+                  <td colspan="5" class="admin-empty">Nadie humano pendiente todavía</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="admin-table-wrap panel">
+          <h2>Solo auto-reply — bot contestó</h2>
+          <p class="map-hint" id="handoff-hint">
+            El bot del alojamiento respondió solo. Si un humano escribe después, salta a Prioridad.
+          </p>
+          <div class="admin-table-scroll">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Negocio</th>
+                  <th>Zona</th>
+                  <th>Tipo</th>
+                  <th>Última respuesta</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="responded-tbody">
+                <tr>
+                  <td colspan="5" class="admin-empty">Ningún auto-reply pendiente</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="admin-table-wrap panel">
+          <h2>En seguimiento — ya contestaste</h2>
+          <p class="map-hint">Si vuelven a escribir por Twilio, vuelven a «por contestar».</p>
+          <div class="admin-table-scroll">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Negocio</th>
+                  <th>Zona</th>
+                  <th>Tipo</th>
+                  <th>Última respuesta</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="followup-tbody">
+                <tr>
+                  <td colspan="5" class="admin-empty">Todavía no marcaste ninguno</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
       <section class="panel campaign-controls">
         <h2>3. Respuestas rápidas (tu WhatsApp)</h2>
         <p class="map-hint">
-          Copiá el texto y pegalo en la charla personal. Opcional: poné el nombre del complejo para personalizar.
+          Copiá el texto y pegalo en la charla personal. Opcional: nombre del complejo.
         </p>
         <div class="actions-row" style="margin-bottom: 1rem">
           <label>
@@ -102,30 +209,9 @@
         <div id="quick-replies" class="quick-replies" aria-label="Respuestas rápidas"></div>
       </section>
 
-      <section class="admin-table-wrap panel">
-        <h2>Pipeline CRM (campaña)</h2>
-        <div class="admin-table-scroll">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Negocio</th>
-                <th>Zona</th>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>Abrir</th>
-              </tr>
-            </thead>
-            <tbody id="leads-tbody">
-              <tr>
-                <td colspan="5" class="admin-empty">Cargando…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="admin-table-wrap panel">
-        <h2>Log envíos Twilio</h2>
+      <details class="panel campaign-controls" id="advanced-logs">
+        <summary>Log técnico de envíos Twilio (opcional)</summary>
+        <p class="map-hint">Detalle de SIDs / errores. Para el día a día usá los KPIs.</p>
         <div class="admin-table-scroll">
           <table class="admin-table">
             <thead>
@@ -144,14 +230,18 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
     </main>
+
+    <button type="button" class="fab-home" id="fab-home" title="Volver arriba / KPIs" hidden>
+      ↑ KPIs
+    </button>
 
     <div class="loading-overlay" id="loading" hidden>
       <div class="spinner"></div>
       <p id="loading-text">Procesando…</p>
     </div>
 
-    <script src="/static/js/campaign.js?v=3"></script>
+    <script src="/static/js/campaign.js?v=13"></script>
   </body>
 </html>

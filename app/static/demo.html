@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo bot de reservas · SofIA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body class="demo-body">
+    <header class="demo-header">
+      <div class="brand-block">
+        <p class="brand-mark">SofIA</p>
+        <h1>Probá el bot de reservas</h1>
+        <p class="brand-tagline">
+          Usá los atajos o el calendario. Así responde el WhatsApp del complejo — sin que el dueño esté pegado al celular.
+        </p>
+      </div>
+    </header>
+
+    <main class="demo-main">
+      <aside class="demo-meta panel">
+        <h2>Complejo de muestra</h2>
+        <p id="demo-property-name" class="demo-prop-name">Demo SofIA</p>
+        <p id="demo-property-zone" class="map-hint">Complejo ficticio (se elige al azar)</p>
+        <ul class="demo-facts">
+          <li>Elegí fechas con el calendario o los chips</li>
+          <li>Después pedí precio o “quiero reservar”</li>
+          <li>Cuando pedí tu nombre, escribilo abajo o tocá un chip</li>
+          <li>Demo SofIA · ~$19.000/mes el servicio real</li>
+        </ul>
+        <p class="map-hint" id="turns-left"></p>
+        <button type="button" class="btn btn-secondary btn-sm" id="restart-btn">Reiniciar chat</button>
+      </aside>
+
+      <section class="demo-chat panel" aria-label="Chat de demo">
+        <div class="demo-messages" id="messages" role="log" aria-live="polite"></div>
+
+        <div class="demo-guides">
+          <p class="demo-guides-label">Atajos rápidos</p>
+          <div class="demo-chips" id="chips" aria-label="Respuestas rápidas"></div>
+
+          <details class="demo-dates-panel" open>
+            <summary>Calendario · fechas y personas</summary>
+            <div class="demo-dates">
+              <label>
+                Entrada
+                <input type="date" id="date-in" />
+              </label>
+              <label>
+                Salida
+                <input type="date" id="date-out" />
+              </label>
+              <label>
+                Personas
+                <select id="guests">
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4" selected>4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                </select>
+              </label>
+              <button type="button" class="btn btn-primary btn-sm" id="send-dates-btn">Consultar fechas</button>
+            </div>
+          </details>
+        </div>
+
+        <form class="demo-composer" id="chat-form">
+          <label class="demo-composer-label" for="chat-input">Tu respuesta (nombre, fechas o lo que te pida el bot)</label>
+          <div class="demo-composer-row">
+            <textarea
+              id="chat-input"
+              class="demo-chat-input"
+              placeholder="Ej: Me llamo Ana / somos 4 / ¿cuánto es la seña?"
+              autocomplete="off"
+              maxlength="800"
+              rows="2"
+            ></textarea>
+            <button type="submit" class="btn btn-primary" id="send-btn">Enviar</button>
+          </div>
+        </form>
+        <p class="map-hint demo-foot">
+          Esto es una muestra. Si te gusta, pedile a Gustavo de SofIA que lo arme con tu complejo.
+        </p>
+      </section>
+    </main>
+
+    <div class="loading-overlay" id="loading" hidden>
+      <div class="spinner"></div>
+      <p>El bot está respondiendo…</p>
+    </div>
+
+    <script src="/static/js/demo.js?v=5"></script>
+  </body>
+</html>

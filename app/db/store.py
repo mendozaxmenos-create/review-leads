@@ -495,6 +495,124 @@ class Store:
             rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
+    def list_sent_zones(self, campaign: str, *, live_only: bool = True) -> list[dict[str, Any]]:
+        """Zonas / lugares con al menos un envío OK (agrupado)."""
+        query = """
+            SELECT
+                COALESCE(NULLIF(TRIM(zone), ''), '(sin zona)') AS zone,
+                COUNT(DISTINCT place_id) AS places,
+                COUNT(*) AS sends,
+                MAX(created_at) AS last_sent_at
+            FROM campaign_sends
+            WHERE campaign = ? AND ok = 1
+        """
+        params: list[Any] = [campaign]
+        if live_only:
+            query += " AND dry_run = 0"
+        query += " GROUP BY COALESCE(NULLIF(TRIM(zone), ''), '(sin zona)') ORDER BY places DESC, zone COLLATE NOCASE"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def sent_place_ids_for_zone(
+        self, campaign: str, zone: str, *, live_only: bool = True
+    ) -> list[str]:
+        z = (zone or "").strip()
+        if not z or z == "(sin zona)":
+            query = """
+                SELECT DISTINCT place_id FROM campaign_sends
+                WHERE campaign = ? AND ok = 1
+                  AND (zone IS NULL OR TRIM(zone) = '')
+            """
+            params: list[Any] = [campaign]
+        else:
+            query = """
+                SELECT DISTINCT place_id FROM campaign_sends
+                WHERE campaign = ? AND ok = 1 AND TRIM(zone) = ?
+            """
+            params = [campaign, z]
+        if live_only:
+            query = query.replace("AND ok = 1", "AND ok = 1 AND dry_run = 0")
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [row["place_id"] for row in rows if row["place_id"]]
+
+    def list_sent_zones_for_base(
+        self,
+        *,
+        campaign_id: str,
+        campaign_tag: str,
+        base: str,
+        live_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Zonas con envío live, solo de leads de la base elegida."""
+        base_name = (base or "").strip() or "Mendoza"
+        query = """
+            SELECT
+                COALESCE(NULLIF(TRIM(cs.zone), ''), '(sin zona)') AS zone,
+                COUNT(DISTINCT cs.place_id) AS places,
+                COUNT(*) AS sends,
+                MAX(cs.created_at) AS last_sent_at
+            FROM campaign_sends cs
+            INNER JOIN saved_leads sl ON sl.place_id = cs.place_id
+            WHERE cs.campaign = ?
+              AND cs.ok = 1
+              AND json_extract(sl.lead_json, '$.campaign') = ?
+              AND COALESCE(NULLIF(TRIM(json_extract(sl.lead_json, '$.base')), ''), 'Mendoza') = ?
+        """
+        params: list[Any] = [campaign_id, campaign_tag, base_name]
+        if live_only:
+            query += " AND cs.dry_run = 0"
+        query += """
+            GROUP BY COALESCE(NULLIF(TRIM(cs.zone), ''), '(sin zona)')
+            ORDER BY places DESC, zone COLLATE NOCASE
+        """
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_campaign_bases(self, campaign_tag: str) -> list[dict[str, Any]]:
+        """Bases cargadas en CRM (lead_json.base) con totales."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    COALESCE(NULLIF(TRIM(json_extract(sl.lead_json, '$.base')), ''), 'Mendoza') AS base,
+                    COUNT(*) AS leads
+                FROM saved_leads sl
+                WHERE json_extract(sl.lead_json, '$.campaign') = ?
+                GROUP BY COALESCE(NULLIF(TRIM(json_extract(sl.lead_json, '$.base')), ''), 'Mendoza')
+                ORDER BY leads DESC, base COLLATE NOCASE
+                """,
+                (campaign_tag,),
+            ).fetchall()
+        sent_ids = self.all_live_sent_place_ids()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            base = row["base"]
+            # cuántos de esta base ya tienen envío live
+            with self._connect() as conn:
+                place_rows = conn.execute(
+                    """
+                    SELECT sl.place_id
+                    FROM saved_leads sl
+                    WHERE json_extract(sl.lead_json, '$.campaign') = ?
+                      AND COALESCE(NULLIF(TRIM(json_extract(sl.lead_json, '$.base')), ''), 'Mendoza') = ?
+                    """,
+                    (campaign_tag, base),
+                ).fetchall()
+            place_ids = {r["place_id"] for r in place_rows if r["place_id"]}
+            sent = len(place_ids & sent_ids)
+            out.append(
+                {
+                    "base": base,
+                    "leads": int(row["leads"] or 0),
+                    "sent": sent,
+                    "pending": max(0, int(row["leads"] or 0) - sent),
+                }
+            )
+        return out
+
     def campaign_sent_place_ids(self, campaign: str, *, live_only: bool = True) -> set[str]:
         query = """
             SELECT DISTINCT place_id FROM campaign_sends
@@ -506,6 +624,35 @@ class Store:
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return {row["place_id"] for row in rows}
+
+    def all_live_sent_place_ids(self) -> set[str]:
+        """Place IDs con envío live OK en cualquier campaña (anti-reenvío entre bases)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT place_id FROM campaign_sends
+                WHERE ok = 1 AND dry_run = 0 AND place_id IS NOT NULL AND place_id != ''
+                """
+            ).fetchall()
+        return {row["place_id"] for row in rows}
+
+    def all_live_sent_phone_digits(self) -> set[str]:
+        """Últimos 10 dígitos de teléfonos ya contactados live (anti-reenvío)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT phone FROM campaign_sends
+                WHERE ok = 1 AND dry_run = 0 AND phone IS NOT NULL AND phone != ''
+                """
+            ).fetchall()
+        out: set[str] = set()
+        for row in rows:
+            digits = "".join(ch for ch in str(row["phone"] or "") if ch.isdigit())
+            if len(digits) >= 10:
+                out.add(digits[-10:])
+            elif digits:
+                out.add(digits)
+        return out
 
     def campaign_send_stats(self, campaign: str) -> dict[str, int]:
         with self._connect() as conn:
@@ -631,18 +778,20 @@ class Store:
                 return item
         return None
 
-    def list_responded_campaign_leads(self, campaign_tag: str, limit: int = 100) -> list[dict[str, Any]]:
+    def list_campaign_leads_by_status(
+        self, campaign_tag: str, status: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT sl.id, sl.place_id, sl.status, sl.notes, sl.lead_json, sl.updated_at
                 FROM saved_leads sl
                 WHERE json_extract(sl.lead_json, '$.campaign') = ?
-                  AND sl.status = 'responded'
+                  AND sl.status = ?
                 ORDER BY sl.updated_at DESC
                 LIMIT ?
                 """,
-                (campaign_tag, limit),
+                (campaign_tag, status, limit),
             ).fetchall()
         results = []
         for row in rows:
@@ -650,6 +799,9 @@ class Store:
             item["lead"] = json.loads(item.pop("lead_json"))
             results.append(item)
         return results
+
+    def list_responded_campaign_leads(self, campaign_tag: str, limit: int = 100) -> list[dict[str, Any]]:
+        return self.list_campaign_leads_by_status(campaign_tag, "responded", limit=limit)
 
     @staticmethod
     def _row_to_profile(row: sqlite3.Row) -> ServiceProfile:

@@ -25,8 +25,9 @@ const LEAD_STATUSES = [
   { code: 0, value: "new", label: "0 — Pendiente de contacto" },
   { code: 1, value: "contacted", label: "1 — Contacto realizado" },
   { code: 2, value: "responded", label: "2 — Respondió" },
-  { code: 3, value: "closed", label: "3 — Cerrado" },
-  { code: 4, value: "discarded", label: "4 — Descartado" },
+  { code: 3, value: "follow_up", label: "3 — En seguimiento" },
+  { code: 4, value: "closed", label: "4 — Cerrado" },
+  { code: 5, value: "discarded", label: "5 — Descartado" },
 ];
 
 let map;

@@ -20,6 +20,8 @@ App para buscar reseñas de Google en una zona geográfica, clasificarlas con IA
 7. Devuelve leads con pitch, valor de la solución y reseñas en español
 8. Genera mensajes de outreach (WhatsApp / email) y simula conversación con bot de ventas
 9. **CRM** en `/admin` con pipeline de estados
+10. **Campaña Mendoza** (`/campaign`): Twilio primer contacto, inbox clasificado, handoff a WhatsApp personal
+11. **Demo del bot de reservas** (`/demo`) para mostrar el producto a leads
 
 ## Requisitos
 
@@ -66,6 +68,7 @@ Editá `.env` (ver `.env.example`):
 |------|-------------|
 | http://127.0.0.1:8000 | UI principal — generar leads |
 | http://127.0.0.1:8000/campaign | **Dashboard campaña Mendoza · cabañas** (Twilio + handoff) |
+| http://127.0.0.1:8000/demo | **Demo interactiva del bot de reservas** (sin Twilio; para mostrar a leads) |
 | http://127.0.0.1:8000/admin | Panel CRM |
 | http://127.0.0.1:8000/docs | API interactiva (Swagger) |
 | http://127.0.0.1:8000/health | Health check |
@@ -110,7 +113,7 @@ Al enviar WhatsApp o email desde la UI, el lead pasa a **1 — Contacto realizad
 
 ### Campaña Mendoza · cabañas + Twilio
 
-Flujo de producto: **Twilio = solo el primer mensaje** → cuando contestan, seguís en **tu WhatsApp personal** (respuestas rápidas en el dashboard). Oferta actual: **bot de reservas $19.000/mes**.
+Flujo de producto: **Twilio = solo el primer mensaje** → cuando contestan, seguís en **tu WhatsApp personal** (respuestas rápidas en el dashboard). Oferta actual: **bot de reservas ~$19.000/mes**.
 
 #### Dashboard (`/campaign`)
 
@@ -122,7 +125,49 @@ Flujo de producto: **Twilio = solo el primer mensaje** → cuando contestan, seg
 | Contestaron | Respondieron al primer mensaje |
 | Contactados sin reply | Enviados, todavía no contestaron |
 
-También: upload/sync CSV, lotes dry-run/live, tabla Contestaron + **Abrir en mi WhatsApp**, respuestas rápidas con **Copiar**, log de envíos.
+Los KPIs son **clickeables**: abren la misma tabla de leads (con mensajes inbound) filtrada por ese KPI. Botón flotante **↑ KPIs** / cerrar para volver.
+
+**Bases y zonas**
+
+- Upload CSV con nombre de **base** (`base_name`); cada lead guarda `lead_json.base`
+- Dropdown **Bases en CRM** (conteos: leads / enviados / pendientes)
+- Tras elegir una base: **Zonas ya contactadas** → click abre KPI `sent` filtrado por zona
+- **No reenvía** a un `place_id` o teléfono ya contactado en *cualquier* envío live (aunque esté en otra base)
+
+**Inbox de respuestas (clasificación automática)**
+
+Inbound WhatsApp se clasifica en `app/services/reply_classify.py`:
+
+| Señal | Significado |
+|-------|-------------|
+| Prioridad | Humano o humano después de auto-reply (hay que contestar) |
+| Solo auto-reply | Mensajes de ausencia / bots; un humano puede retomar después |
+| En seguimiento | Marcaste “Ya contesté” |
+
+- Hilos con humano (o retomó después del auto) **siguen en Prioridad** aunque estén en follow-up, para no perderlos
+- Auto-replies tipo hotel (“en un momento respondemos…”) se marcan como auto, no como humano
+
+**Acciones del dashboard**
+
+- Upload/sync CSV, lotes dry-run/live (**Enviar lote** = hasta N pendientes; saltea ya enviados)
+- Tabla Contestaron + **Abrir en mi WhatsApp**
+- **Respuestas rápidas** de venta (demo, “pásame info”, objeciones, etc.) con `{{nombre}}` / `{{demo_url}}` + Copiar
+- Link a **Demo bot** (`/demo`)
+- Log técnico de Twilio en un `<details>` colapsado
+
+#### Demo del bot de reservas (`/demo`)
+
+Página para **mostrar el producto** a un dueño de complejo (sin costo Twilio):
+
+| Pieza | Detalle |
+|-------|---------|
+| UI | Chat + chips (finde, personas, nombre, precio…) + calendario entrada/salida |
+| API | `POST /api/demo/session`, `POST /api/demo/chat` |
+| Bot | `app/services/demo_booking_bot.py` — OpenAI (`gpt-4o-mini`) + fallback por reglas |
+| Sesión | En memoria (~24 turnos); si el server recarga, la UI reinicia sola |
+| Complejo | Nombre inventado al azar (no usa lodges reales de la base) |
+
+Compartir con un lead: URL pública (`/demo` detrás de ngrok/Fly). Local solo sirve en tu PC.
 
 #### Pipeline de datos
 
@@ -166,8 +211,8 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 #### Handoff (después de que contestan)
 
-1. Dashboard → **Contestaron** → Abrir en mi WhatsApp / Usar nombre  
-2. Sección **Respuestas rápidas** → Copiar pitch de seguimiento  
+1. Dashboard → **Prioridad / Contestaron** → Abrir en mi WhatsApp / Usar nombre  
+2. Sección **Respuestas rápidas** → Copiar pitch de seguimiento (incluye link a `/demo`)  
 3. No responder por Twilio (ahorra costo por mensaje)
 
 ### Bot de ventas
@@ -188,10 +233,11 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 | Código | Valor | Etiqueta |
 |--------|-------|----------|
 | 0 | `new` | Pendiente de contacto |
-| 1 | `contacted` | Contacto realizado |
-| 2 | `responded` | Respondió |
-| 3 | `closed` | Cerrado |
-| 4 | `discarded` | Descartado |
+| 1 | `contacted` | Contacto realizado (Twilio enviado) |
+| 2 | `responded` | Respondió (por contestar vos) |
+| 3 | `follow_up` | En seguimiento (ya contestaste) |
+| 4 | `closed` | Cerrado |
+| 5 | `discarded` | Descartado |
 
 ## Modelo de lead (por negocio)
 
@@ -243,9 +289,18 @@ curl -X POST http://127.0.0.1:8000/api/search \
 | `POST` | `/api/campaigns/mendoza-cabanas/upload` |
 | `POST` | `/api/campaigns/mendoza-cabanas/send-wa` |
 | `GET` | `/api/campaigns/mendoza-cabanas/responded` |
+| `GET` | `/api/campaigns/mendoza-cabanas/kpi/{kpi}` |
+| `GET` | `/api/campaigns/mendoza-cabanas/bases/{base_name}/sent-zones` |
 | `POST` | `/api/campaigns/mendoza-cabanas/handoff` |
 | `POST` | `/api/twilio/whatsapp/inbound` |
 | `POST` | `/api/twilio/whatsapp/status` |
+
+### Demo bot de reservas
+
+| Método | Ruta |
+|--------|------|
+| `POST` | `/api/demo/session` |
+| `POST` | `/api/demo/chat` |
 
 ### Historial y CRM
 
@@ -271,11 +326,12 @@ app/
 ├── main.py
 ├── config.py
 ├── models/          schemas.py, lead_status.py
-├── routers/         search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks
-├── db/store.py      SQLite: caché, historial, CRM, campaign_sends/messages
-├── services/        places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign, campaign_send
+├── routers/         search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
+├── db/store.py      SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
+├── services/        places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
+│                    campaign_send, reply_classify, demo_booking_bot
 ├── data/            services, business_types, cabanas_filter, outreach_guidelines, ar_locations
-└── static/          index.html, campaign.html, admin.html, js/, css/, sofia-wa-avatar.png
+└── static/          index.html, campaign.html, demo.html, admin.html, js/, css/, sofia-wa-avatar.png
 scripts/             etl/sweep/send batches, create_wa_template, run_mendoza_remaining.bat
 Dockerfile
 fly.toml             Fly.io (región gru) — trial vencido hasta agregar billing
@@ -396,16 +452,17 @@ pip install -r requirements.txt   # si hubo cambios
 
 ## Pendiente / roadmap
 
-- [ ] Reactivar Fly.io (tarjeta) **o** deploy en Render
+- [ ] Reactivar Fly.io (tarjeta) **o** deploy en Render (necesario para `/demo` pública a leads)
 - [ ] Volumen persistente o DB externa para CRM permanente
+- [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
 - [ ] Email desde web del negocio (Google no expone email)
 - [ ] Batch IA — varias reseñas en una llamada OpenAI
-- [ ] WhatsApp Cloud API oficial (si se quiere bot real; no Web automation)
 
 ## Changelog
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Clasificación inbound (prioridad / auto-reply), KPIs clickeables, multi-base + no reenvío, demo `/demo` con chips/calendario |
 | Ago 2026 | Dashboard `/campaign`, Twilio WA prod, ETL Mendoza, handoff + respuestas rápidas, lotes programados |
 | Ago 2026 | Modo directorio: listar hoteles/rubro por localidad + WA + contactado |
 | Jun 2026 | Modo descubrimiento multi-rubro, geocodificación AR, filtros gobierno |

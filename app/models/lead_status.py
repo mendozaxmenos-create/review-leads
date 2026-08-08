@@ -12,8 +12,9 @@ LEAD_STATUS_PIPELINE: list[LeadStatusStep] = [
     LeadStatusStep(0, "new", "Pendiente de contacto"),
     LeadStatusStep(1, "contacted", "Contacto realizado"),
     LeadStatusStep(2, "responded", "Respondió"),
-    LeadStatusStep(3, "closed", "Cerrado"),
-    LeadStatusStep(4, "discarded", "Descartado"),
+    LeadStatusStep(3, "follow_up", "En seguimiento"),
+    LeadStatusStep(4, "closed", "Cerrado"),
+    LeadStatusStep(5, "discarded", "Descartado"),
 ]
 
 _STATUS_BY_VALUE = {step.value: step for step in LEAD_STATUS_PIPELINE}
