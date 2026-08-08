@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     twilio_send_delay_seconds: float = 3.0  # sandbox: 1 msg / 3s; prod puede bajar a ~1–2s
 
     # Demo pública para leads (nunca uses 127.0.0.1 en el pitch)
-    # DEMO_PUBLIC_URL=https://tu-app.onrender.com  → el pitch usa https://tu-app.onrender.com/demo?k=TOKEN
+    # DEMO_PUBLIC_URL=https://tu-app.onrender.com  → el pitch usa https://tu-app.onrender.com/demo
     demo_public_url: str = ""  # origen público sin path, ej. https://review-leads.onrender.com
-    demo_access_token: str = ""  # si está seteado, /demo y /api/demo/* exigen ?k= o header X-Demo-Token
-    dashboard_access_token: str = ""  # si está seteado, /campaign y /admin exigen el mismo esquema ?k=
+    demo_access_token: str = ""  # legacy / ignorado: la demo es pública
+    dashboard_access_token: str = ""  # si está seteado, /campaign y /admin exigen ?k= o X-Dashboard-Token
 
 
 def outreach_sender_signature() -> str:

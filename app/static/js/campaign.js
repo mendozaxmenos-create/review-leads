@@ -1,7 +1,28 @@
+function readDashboardToken() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = (params.get("k") || "").trim();
+  if (fromUrl) {
+    sessionStorage.setItem("sofia_dash_k", fromUrl);
+    return fromUrl;
+  }
+  return (sessionStorage.getItem("sofia_dash_k") || "").trim();
+}
+
+const dashboardToken = readDashboardToken();
+
+function withDashAuth(path) {
+  if (!dashboardToken) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}k=${encodeURIComponent(dashboardToken)}`;
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: opts.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
+  const headers = {};
+  if (!(opts.body instanceof FormData)) headers["Content-Type"] = "application/json";
+  if (dashboardToken) headers["X-Dashboard-Token"] = dashboardToken;
+  const res = await fetch(withDashAuth(path), {
     ...opts,
+    headers: { ...headers, ...(opts.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -759,7 +780,7 @@ els.sentZonesSelect?.addEventListener("change", onSentZoneSelectChange);
 window.addEventListener("scroll", () => updateFab(), { passive: true });
 
 if (els.replyDemoUrl && !els.replyDemoUrl.value) {
-  els.replyDemoUrl.placeholder = "https://tu-app.onrender.com/demo?k=…";
+  els.replyDemoUrl.placeholder = "https://tu-app.onrender.com/demo";
 }
 renderQuickReplies();
 loadShareLink();

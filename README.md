@@ -400,15 +400,13 @@ Persistencia real: volumen Fly en `/data` o PostgreSQL externo.
 
 URL típica: `https://review-leads.onrender.com`
 
-Variables ya definidas en `render.yaml`: `OUTREACH_SENDER_*`, `DATABASE_PATH=/tmp/review-leads.db`, health `/health`, `DEMO_PUBLIC_URL`, `DEMO_ACCESS_TOKEN` (auto-generado).
+Variables ya definidas en `render.yaml`: `OUTREACH_SENDER_*`, `DATABASE_PATH=/tmp/review-leads.db`, health `/health`, `DEMO_PUBLIC_URL`. Seteá `DASHBOARD_ACCESS_TOKEN` a mano.
 
 ### Demo pública para leads (`/demo`)
 
-1. En Render → Environment → copiá el valor de `DEMO_ACCESS_TOKEN`
-2. Link del pitch (único que compartís):
-   `https://review-leads.onrender.com/demo?k=<DEMO_ACCESS_TOKEN>`
-3. En `/campaign` el campo **URL demo** se completa solo si el server tiene `DEMO_PUBLIC_URL` + token
-4. Sin el `?k=` correcto la demo no arranca
+1. Pitch (público, sin token): `https://review-leads.onrender.com/demo`
+2. En `/campaign` el campo **URL demo** se completa si el server tiene `DEMO_PUBLIC_URL`
+3. Dashboard SofIA: seteá `DASHBOARD_ACCESS_TOKEN` y abrí `/campaign?k=…` / `/admin?k=…`
 
 ### Keep-alive con UptimeRobot (gratis, para que no duerma)
 
@@ -428,7 +426,8 @@ UptimeRobot pega cada 5 min → Render no duerme. Costo: $0.
 | Costo | $0 |
 | Sleep | Tras ~15 min sin tráfico (~1 min despertar) — mitigar con UptimeRobot |
 | SQLite | Efímero en `/tmp` |
-| Demo | `/demo?k=…` con token |
+| Demo | `/demo` público |
+| Dashboard | `/campaign?k=…` con `DASHBOARD_ACCESS_TOKEN` |
 
 ## Docker local
 
@@ -480,7 +479,7 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Deploy en Render free + keep-alive UptimeRobot (`/health` cada 5 min)
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
-- [ ] Proteger `/campaign` y `/admin` con `DASHBOARD_ACCESS_TOKEN` en producción
+- [x] Proteger `/campaign` y `/admin` con `DASHBOARD_ACCESS_TOKEN` (demo `/demo` pública)
 - [ ] Email desde web del negocio (Google no expone email)
 - [ ] Batch IA — varias reseñas en una llamada OpenAI
 

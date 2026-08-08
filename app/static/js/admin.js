@@ -39,17 +39,41 @@ const els = {
   whatsappOpenBtn: document.getElementById("whatsapp-open-btn"),
 };
 
+function readDashboardToken() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = (params.get("k") || "").trim();
+  if (fromUrl) {
+    sessionStorage.setItem("sofia_dash_k", fromUrl);
+    return fromUrl;
+  }
+  return (sessionStorage.getItem("sofia_dash_k") || "").trim();
+}
+
+const dashboardToken = readDashboardToken();
+
+function withDashAuth(url) {
+  if (!dashboardToken) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}k=${encodeURIComponent(dashboardToken)}`;
+}
+
+function dashHeaders(extra = {}) {
+  const headers = { ...extra };
+  if (dashboardToken) headers["X-Dashboard-Token"] = dashboardToken;
+  return headers;
+}
+
 async function apiGet(url) {
-  const res = await fetch(url);
+  const res = await fetch(withDashAuth(url), { headers: dashHeaders() });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || "Error en la solicitud");
   return data;
 }
 
 async function apiPatch(url, body) {
-  const res = await fetch(url, {
+  const res = await fetch(withDashAuth(url), {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: dashHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -58,9 +82,9 @@ async function apiPatch(url, body) {
 }
 
 async function apiPost(url, body) {
-  const res = await fetch(url, {
+  const res = await fetch(withDashAuth(url), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: dashHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   const data = await res.json();

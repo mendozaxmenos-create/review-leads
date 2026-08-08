@@ -27,8 +27,6 @@ services:
         sync: false
       - key: DEMO_PUBLIC_URL
         value: https://review-leads.onrender.com
-      - key: DEMO_ACCESS_TOKEN
-        generateValue: true
       - key: DASHBOARD_ACCESS_TOKEN
         sync: false
     # Keep-alive gratis: UptimeRobot → GET https://review-leads.onrender.com/health cada 5 min

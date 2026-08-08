@@ -1,12 +1,11 @@
-"""Demo pública: bot de reservas para que el prospecto pruebe."""
+"""Demo pública: bot de reservas para que el prospecto pruebe (sin token)."""
 
 from __future__ import annotations
 
-import secrets
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -35,21 +34,6 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def require_demo_token(
-    k: str | None = None,
-    x_demo_token: str | None = None,
-) -> None:
-    expected = (settings.demo_access_token or "").strip()
-    if not expected:
-        return  # local sin token = abierto (solo en tu PC)
-    got = (x_demo_token or k or "").strip()
-    if not got or not secrets.compare_digest(got, expected):
-        raise HTTPException(
-            status_code=401,
-            detail="Demo protegida. Pedile el link a Gustavo de SofIA.",
-        )
-
-
 def _rate_limit_session(request: Request) -> None:
     ip = _client_ip(request)
     now = time.time()
@@ -64,13 +48,10 @@ def _rate_limit_session(request: Request) -> None:
 
 
 def public_demo_share_url() -> str | None:
-    """URL para pegar en WhatsApp (origen público + token)."""
+    """URL para pegar en WhatsApp (origen público, sin token)."""
     base = (settings.demo_public_url or "").strip().rstrip("/")
     if not base:
         return None
-    token = (settings.demo_access_token or "").strip()
-    if token:
-        return f"{base}/demo?k={token}"
     return f"{base}/demo"
 
 
@@ -81,33 +62,23 @@ async def demo_share_link() -> dict:
     return {
         "url": url,
         "configured": bool(url),
-        "token_required": bool((settings.demo_access_token or "").strip()),
+        "token_required": False,
         "hint": (
             None
             if url
-            else "Seteá DEMO_PUBLIC_URL (https://tu-app.onrender.com) y DEMO_ACCESS_TOKEN en .env"
+            else "Seteá DEMO_PUBLIC_URL=https://review-leads.onrender.com en el server"
         ),
     }
 
 
 @router.post("/session")
-async def start_demo_session(
-    request: Request,
-    k: str | None = Query(default=None),
-    x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
-) -> dict:
-    require_demo_token(k=k, x_demo_token=x_demo_token)
+async def start_demo_session(request: Request) -> dict:
     _rate_limit_session(request)
     return demo_booking_bot.create_session()
 
 
 @router.post("/chat")
-async def demo_chat(
-    body: DemoChatRequest,
-    k: str | None = Query(default=None),
-    x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
-) -> dict:
-    require_demo_token(k=k, x_demo_token=x_demo_token)
+async def demo_chat(body: DemoChatRequest) -> dict:
     try:
         return await demo_booking_bot.chat(body.session_id, body.message)
     except ValueError as exc:
@@ -115,12 +86,7 @@ async def demo_chat(
 
 
 @router.post("/simulate-mp-payment")
-async def simulate_mp_payment(
-    body: DemoSessionRequest,
-    k: str | None = Query(default=None),
-    x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
-) -> dict:
-    require_demo_token(k=k, x_demo_token=x_demo_token)
+async def simulate_mp_payment(body: DemoSessionRequest) -> dict:
     try:
         return demo_booking_bot.simulate_mp_payment(body.session_id)
     except ValueError as exc:
@@ -128,12 +94,7 @@ async def simulate_mp_payment(
 
 
 @router.post("/approve-transfer")
-async def approve_transfer(
-    body: DemoSessionRequest,
-    k: str | None = Query(default=None),
-    x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
-) -> dict:
-    require_demo_token(k=k, x_demo_token=x_demo_token)
+async def approve_transfer(body: DemoSessionRequest) -> dict:
     try:
         return demo_booking_bot.approve_transfer(body.session_id)
     except ValueError as exc:
@@ -141,12 +102,7 @@ async def approve_transfer(
 
 
 @router.post("/reject-transfer")
-async def reject_transfer(
-    body: DemoSessionRequest,
-    k: str | None = Query(default=None),
-    x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
-) -> dict:
-    require_demo_token(k=k, x_demo_token=x_demo_token)
+async def reject_transfer(body: DemoSessionRequest) -> dict:
     try:
         return demo_booking_bot.reject_transfer(body.session_id)
     except ValueError as exc:

@@ -1,11 +1,16 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth_gate import (
+    dashboard_token_ok,
+    locked_dashboard_html,
+    path_needs_dashboard_token,
+)
 from app.config import settings
 from app.db.store import get_store
 from app.routers import admin, campaigns, demo, geocode, history, outreach, projects, search, twilio_webhooks
@@ -33,6 +38,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def dashboard_access_middleware(request: Request, call_next):
+    """Protege /campaign, /admin y sus APIs si hay DASHBOARD_ACCESS_TOKEN. /demo queda abierto."""
+    if path_needs_dashboard_token(request.url.path) and not dashboard_token_ok(request):
+        if request.url.path in ("/campaign", "/admin"):
+            return locked_dashboard_html()
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail": "Dashboard protegido. Abrí /campaign?k=TU_TOKEN o /admin?k=TU_TOKEN",
+            },
+        )
+    return await call_next(request)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(projects.router)
@@ -62,11 +82,8 @@ async def campaign_page() -> FileResponse:
 
 
 @app.get("/demo")
-async def demo_page(k: str | None = None) -> FileResponse:
-    """Sirve la página; el JS valida el token contra la API."""
-    # Si hay token configurado y falta en la URL, igual servimos HTML
-    # (el front muestra pantalla de acceso denegado al fallar /session).
-    _ = k
+async def demo_page() -> FileResponse:
+    """Demo pública para leads — sin token."""
     return FileResponse(STATIC_DIR / "demo.html")
 
 
