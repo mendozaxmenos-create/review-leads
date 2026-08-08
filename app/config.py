@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # Avisos al dueño cuando un lead escribe (Prioridad / humano)
     alert_on_human_reply: bool = True
     alert_whatsapp_to: str = ""  # ej. whatsapp:+549261... o +549261...
+    # Plantilla Utility (Content SID). Sin esto, freeform falla fuera de ventana 24h (63016).
+    alert_whatsapp_template_sid: str = ""
     alert_email_to: str = ""  # ej. vos@gmail.com
     smtp_host: str = ""
     smtp_port: int = 587

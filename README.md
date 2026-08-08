@@ -164,8 +164,9 @@ Cuando un inbound pasa a «Por contestar (humano)» (primera vez del hilo, no ca
 
 | Variable | Uso |
 |----------|-----|
-| `ALERT_WHATSAPP_TO` | Tu celular (mismo sender Twilio; fuera de ventana 24h puede fallar) |
-| `ALERT_EMAIL_TO` + `SMTP_*` | Email (más fiable; Gmail = App Password) |
+| `ALERT_WHATSAPP_TO` | Tu celular |
+| `ALERT_WHATSAPP_TEMPLATE_SID` | Plantilla Utility (sin esto Meta rechaza fuera de 24h, error 63016). Crear: `python scripts/create_wa_alert_template.py` |
+| `ALERT_EMAIL_TO` + `SMTP_*` | Email opcional |
 | `ALERT_DASHBOARD_URL` | Link en el mensaje |
 | `ALERT_ON_HUMAN_REPLY` | `false` para apagar |
 

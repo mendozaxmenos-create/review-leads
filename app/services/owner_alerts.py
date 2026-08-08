@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import smtplib
+import time
 from email.message import EmailMessage
 
 from app.config import settings
@@ -64,7 +66,40 @@ def build_alert_text(
     )
 
 
-def send_alert_whatsapp(text: str) -> tuple[bool, str]:
+def _alert_headline(place_name: str, zone: str, base: str) -> str:
+    parts = [p for p in [(place_name or "").strip(), (zone or "").strip(), (base or "").strip()] if p]
+    return (" · ".join(parts) or "Lead")[:80]
+
+
+def _alert_snippet(body: str) -> str:
+    return (body or "").strip().replace("\n", " ")[:60] or "(sin texto)"
+
+
+def _wait_delivery(client, sid: str, *, attempts: int = 6, delay: float = 1.0) -> tuple[str, int | None, str | None]:
+    """Poll corto para detectar undelivered (ej. 63016) en el test/aviso."""
+    status = ""
+    err_code: int | None = None
+    err_msg: str | None = None
+    for _ in range(max(1, attempts)):
+        time.sleep(delay)
+        msg = client.messages(sid).fetch()
+        status = (msg.status or "").lower()
+        err_code = msg.error_code
+        err_msg = msg.error_message
+        if status in ("delivered", "read", "failed", "undelivered"):
+            break
+    return status, err_code, err_msg
+
+
+def send_alert_whatsapp(
+    text: str,
+    *,
+    place_name: str = "",
+    zone: str = "",
+    base: str = "",
+    body: str = "",
+    wait_delivery: bool = False,
+) -> tuple[bool, str]:
     to = _normalize_wa(settings.alert_whatsapp_to)
     if not to:
         return False, "ALERT_WHATSAPP_TO vacío"
@@ -77,10 +112,35 @@ def send_alert_whatsapp(text: str) -> tuple[bool, str]:
         from twilio.rest import Client
     except ImportError:
         return False, "Instalá twilio"
+
+    template_sid = (settings.alert_whatsapp_template_sid or "").strip()
     try:
         client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-        msg = client.messages.create(from_=from_number, to=to, body=text[:1500])
-        return True, msg.sid or "ok"
+        if template_sid:
+            headline = _alert_headline(place_name, zone, base)
+            snippet = _alert_snippet(body)
+            msg = client.messages.create(
+                from_=from_number,
+                to=to,
+                content_sid=template_sid,
+                content_variables=json.dumps(
+                    {"1": headline, "2": snippet},
+                    ensure_ascii=False,
+                ),
+            )
+            mode = "template"
+        else:
+            msg = client.messages.create(from_=from_number, to=to, body=text[:1500])
+            mode = "freeform"
+
+        sid = msg.sid or "ok"
+        detail = f"{mode}:{sid}"
+        if wait_delivery and msg.sid:
+            status, err_code, err_msg = _wait_delivery(client, msg.sid)
+            detail = f"{mode}:{sid}:{status}"
+            if status in ("failed", "undelivered") or err_code:
+                return False, f"{detail} err={err_code} {err_msg or ''}".strip()
+        return True, detail
     except Exception as exc:
         logger.exception("alert whatsapp failed")
         return False, str(exc)
@@ -121,6 +181,7 @@ def notify_owner_human_reply(
     phone: str = "",
     body: str = "",
     thread_label: str = "Respuesta humana",
+    wait_delivery: bool = False,
 ) -> dict:
     if not settings.alert_on_human_reply:
         return {"skipped": True, "reason": "ALERT_ON_HUMAN_REPLY=false"}
@@ -137,8 +198,20 @@ def notify_owner_human_reply(
     result: dict = {"whatsapp": None, "email": None}
 
     if (settings.alert_whatsapp_to or "").strip():
-        ok, detail = send_alert_whatsapp(text)
+        if not (settings.alert_whatsapp_template_sid or "").strip():
+            logger.warning(
+                "ALERT_WHATSAPP_TEMPLATE_SID vacío: freeform suele fallar con 63016 fuera de ventana 24h"
+            )
+        ok, detail = send_alert_whatsapp(
+            text,
+            place_name=place_name,
+            zone=zone,
+            base=base,
+            body=body,
+            wait_delivery=wait_delivery,
+        )
         result["whatsapp"] = {"ok": ok, "detail": detail}
+        print(f"[owner_alerts] whatsapp ok={ok} detail={detail}", flush=True)
     if (settings.alert_email_to or "").strip():
         ok, detail = send_alert_email(subject, text)
         result["email"] = {"ok": ok, "detail": detail}

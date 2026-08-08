@@ -580,5 +580,6 @@ async def test_owner_alert() -> dict:
         phone="+54900000000",
         body="Este es un aviso de prueba del KPI Prioridad (humano).",
         thread_label="Prueba de alerta",
+        wait_delivery=True,
     )
     return {"ok": True, "result": result}
