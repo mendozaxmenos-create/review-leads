@@ -1,4 +1,4 @@
-"""Campañas de prospección por lote (ej. cabañas Mendoza)."""
+"""Campañas de prospección por lote (ej. cabañas Mendoza / Córdoba)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.data.ar_locations import MENDOZA_CABANAS_ZONES, list_mendoza_cabanas_zones
+from app.config import settings
+from app.data.ar_locations import (
+    CampaignZone,
+    MENDOZA_CABANAS_ZONES,
+    list_cordoba_cabanas_zones,
+    list_mendoza_cabanas_zones,
+)
 from app.data.services import get_profile
 from app.db.store import get_store
 from app.models.schemas import (
@@ -24,15 +30,13 @@ from app.routers import search as search_router
 from app.services.cache import make_search_cache_key
 from app.services.classifier import ReviewClassifier
 from app.services.places import PlacesService
-from app.config import settings
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 FIT_PRIORITY = {LeadFit.HIGH: 0, LeadFit.MEDIUM: 1, LeadFit.LOW: 2, LeadFit.NONE: 3}
 
 
-@router.get("/mendoza-cabanas/zones", response_model=list[CampaignZoneOut])
-async def list_zones() -> list[CampaignZoneOut]:
+def _zones_out(zones: list[CampaignZone]) -> list[CampaignZoneOut]:
     return [
         CampaignZoneOut(
             id=z.id,
@@ -42,16 +46,29 @@ async def list_zones() -> list[CampaignZoneOut]:
             radius_km=z.radius_km,
             zoom=z.zoom,
         )
-        for z in list_mendoza_cabanas_zones()
+        for z in zones
     ]
 
 
-@router.post("/mendoza-cabanas", response_model=MendozaCabanasCampaignResponse)
-async def run_mendoza_cabanas(
-    body: MendozaCabanasCampaignRequest | None = None,
+@router.get("/mendoza-cabanas/zones", response_model=list[CampaignZoneOut])
+async def list_zones() -> list[CampaignZoneOut]:
+    return _zones_out(list_mendoza_cabanas_zones())
+
+
+@router.get("/cordoba-cabanas/zones", response_model=list[CampaignZoneOut])
+async def list_cordoba_zones() -> list[CampaignZoneOut]:
+    return _zones_out(list_cordoba_cabanas_zones())
+
+
+async def run_cabanas_zones(
+    *,
+    zones: list[CampaignZone],
+    req: MendozaCabanasCampaignRequest,
+    campaign: str,
+    region_label: str,
+    default_center: tuple[float, float],
 ) -> MendozaCabanasCampaignResponse:
-    """Barrido de cabañas en zonas turísticas de Mendoza (etapa 1 Villa Oliva)."""
-    req = body or MendozaCabanasCampaignRequest()
+    """Barrido compartido de cabañas por lista de zonas (Mendoza, Córdoba, …)."""
     mode = (req.mode or "directory").lower()
     if mode not in ("directory", "leads"):
         raise HTTPException(status_code=400, detail="mode debe ser 'directory' o 'leads'")
@@ -63,7 +80,6 @@ async def run_mendoza_cabanas(
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    zones = list_mendoza_cabanas_zones()
     if req.zone_ids:
         wanted = set(req.zone_ids)
         zones = [z for z in zones if z.id in wanted]
@@ -147,18 +163,16 @@ async def run_mendoza_cabanas(
             if booking:
                 lead.recommended_project_id = booking.id
                 lead.recommended_project_name = booking.name
-            # Anotar zona en reason si falta contexto
             zone_tag = f"[{zone.label}]"
             if lead.reason and zone_tag not in lead.reason:
                 lead.reason = f"{zone_tag} {lead.reason}"
             elif not lead.reason:
-                lead.reason = f"{zone_tag} Cabaña / complejo en zona turística Mendoza."
+                lead.reason = f"{zone_tag} Cabaña / complejo en zona turística {region_label}."
 
             existing = by_place.get(lead.place_id)
             if not existing:
                 by_place[lead.place_id] = lead
                 continue
-            # Conservar el de mejor fit / más reseñas / con teléfono
             if FIT_PRIORITY.get(lead.lead_fit, 9) < FIT_PRIORITY.get(existing.lead_fit, 9):
                 by_place[lead.place_id] = lead
             elif (lead.phone and not existing.phone) or (
@@ -188,12 +202,11 @@ async def run_mendoza_cabanas(
         )
     )
 
-    # Persistencia agregada en CRM
-    center_lat = zones[0].lat if zones else -33.55
-    center_lng = zones[0].lng if zones else -69.05
+    center_lat = zones[0].lat if zones else default_center[0]
+    center_lng = zones[0].lng if zones else default_center[1]
     campaign_history_id = store.save_search_history(
         request={
-            "campaign": "mendoza-cabanas",
+            "campaign": campaign,
             "mode": mode,
             "business_type": "cabanas",
             "center": {"lat": center_lat, "lng": center_lng},
@@ -203,7 +216,7 @@ async def run_mendoza_cabanas(
         },
         response={
             "project_id": "booking-bot",
-            "project_name": "Bot de reservas · Mendoza cabañas",
+            "project_name": f"Bot de reservas · {region_label} cabañas",
             "places_scanned": places_scanned,
             "leads": [lead.model_dump(mode="json") for lead in leads],
             "leads_unique": len(leads),
@@ -223,13 +236,13 @@ async def run_mendoza_cabanas(
 
     with_phone_total = sum(1 for lead in leads if lead.phone)
     summary = (
-        f"Campaña Mendoza cabañas ({mode}): {zones_ok}/{len(zones)} zonas OK, "
+        f"Campaña {region_label} cabañas ({mode}): {zones_ok}/{len(zones)} zonas OK, "
         f"{places_scanned} lugares escaneados, {len(leads)} leads únicos "
         f"({with_phone_total} con teléfono). Servicio sugerido: Bot de reservas."
     )
 
     return MendozaCabanasCampaignResponse(
-        campaign="mendoza-cabanas",
+        campaign=campaign,
         mode=mode,
         zones_total=len(zones),
         zones_ok=zones_ok,
@@ -243,19 +256,92 @@ async def run_mendoza_cabanas(
     )
 
 
+@router.post("/mendoza-cabanas", response_model=MendozaCabanasCampaignResponse)
+async def run_mendoza_cabanas(
+    body: MendozaCabanasCampaignRequest | None = None,
+) -> MendozaCabanasCampaignResponse:
+    """Barrido de cabañas en zonas turísticas de Mendoza."""
+    req = body or MendozaCabanasCampaignRequest()
+    return await run_cabanas_zones(
+        zones=list_mendoza_cabanas_zones(),
+        req=req,
+        campaign="mendoza-cabanas",
+        region_label="Mendoza",
+        default_center=(-33.55, -69.05),
+    )
+
+
+@router.post("/cordoba-cabanas", response_model=MendozaCabanasCampaignResponse)
+async def run_cordoba_cabanas(
+    body: MendozaCabanasCampaignRequest | None = None,
+) -> MendozaCabanasCampaignResponse:
+    """Barrido de cabañas en Punilla + Calamuchita (base Córdoba)."""
+    req = body or MendozaCabanasCampaignRequest()
+    return await run_cabanas_zones(
+        zones=list_cordoba_cabanas_zones(),
+        req=req,
+        campaign="cordoba-cabanas",
+        region_label="Córdoba",
+        default_center=(-31.42, -64.50),
+    )
+
+
 # Re-export zones constant for scripts
-__all__ = ["router", "MENDOZA_CABANAS_ZONES"]
+__all__ = ["router", "MENDOZA_CABANAS_ZONES", "run_cabanas_zones", "run_cordoba_cabanas"]
 
 
 @router.post("/mendoza-cabanas/sync")
-async def sync_mendoza_etl() -> dict:
-    """Importa CSV ETL limpio al CRM (tag mendoza-cabanas-etl)."""
+async def sync_mendoza_etl(body: dict | None = None) -> dict:
+    """Importa CSV ETL limpio al CRM (tag mendoza-cabanas-etl).
+
+    Body opcional JSON:
+      { "csv_path": "data/exports/cordoba-cabanas-etl-clean.csv", "base_name": "Córdoba" }
+    """
     from app.services.mendoza_campaign import sync_etl_clean_to_crm
 
+    payload = body or {}
+    csv_path = Path(payload["csv_path"]) if payload.get("csv_path") else None
+    if csv_path and not csv_path.is_absolute():
+        csv_path = Path(__file__).resolve().parents[2] / csv_path
+    base_name = payload.get("base_name")
     try:
-        return sync_etl_clean_to_crm()
+        return sync_etl_clean_to_crm(csv_path=csv_path, base_name=base_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/mendoza-cabanas/upload")
+async def upload_mendoza_csv(
+    file: UploadFile = File(...),
+    base_name: str = Form(default="Mendoza"),
+) -> dict:
+    """Sube un CSV de campaña y lo sincroniza al CRM (con nombre de base/región).
+
+    Guarda siempre `campaign-{base}.csv`. Solo pisa `mendoza-cabanas-etl-clean.csv`
+    cuando la base es Mendoza (no sobrescribe el clean activo al subir Córdoba).
+    """
+    from app.services.mendoza_campaign import CAMPAIGN_TAG, sync_etl_clean_to_crm
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Subí un archivo .csv")
+    export_dir = Path(__file__).resolve().parents[2] / "data" / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    base = (base_name or "Mendoza").strip() or "Mendoza"
+    safe_base = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in base)[:40]
+    dest = export_dir / f"campaign-{safe_base or 'base'}.csv"
+    content = await file.read()
+    dest.write_bytes(content)
+    sync_path = dest
+    if base.casefold() in {"mendoza"}:
+        active = export_dir / "mendoza-cabanas-etl-clean.csv"
+        active.write_bytes(content)
+        sync_path = active
+    result = sync_etl_clean_to_crm(csv_path=sync_path, base_name=base)
+    result["campaign_tag"] = CAMPAIGN_TAG
+    result["saved_as"] = str(dest)
+    result["sync_path"] = str(sync_path)
+    result["overwrote_mendoza_clean"] = base.casefold() in {"mendoza"}
+    return result
 
 
 @router.get("/mendoza-cabanas/dashboard")
@@ -343,31 +429,6 @@ async def send_mendoza_wa(body: dict | None = None) -> dict:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return result.model_dump()
-
-
-@router.post("/mendoza-cabanas/upload")
-async def upload_mendoza_csv(
-    file: UploadFile = File(...),
-    base_name: str = Form(default="Mendoza"),
-) -> dict:
-    """Sube un CSV de campaña y lo sincroniza al CRM (con nombre de base/región)."""
-    from app.services.mendoza_campaign import CAMPAIGN_TAG, sync_etl_clean_to_crm
-
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Subí un archivo .csv")
-    export_dir = Path(__file__).resolve().parents[2] / "data" / "exports"
-    export_dir.mkdir(parents=True, exist_ok=True)
-    safe_base = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in (base_name or "base").strip())[:40]
-    dest = export_dir / f"campaign-{safe_base or 'base'}.csv"
-    # Mantener también el path “clean” como activo para el envío
-    active = export_dir / "mendoza-cabanas-etl-clean.csv"
-    content = await file.read()
-    dest.write_bytes(content)
-    active.write_bytes(content)
-    result = sync_etl_clean_to_crm(csv_path=active, base_name=(base_name or "Mendoza").strip() or "Mendoza")
-    result["campaign_tag"] = CAMPAIGN_TAG
-    result["saved_as"] = str(dest)
-    return result
 
 
 @router.get("/mendoza-cabanas/responded")

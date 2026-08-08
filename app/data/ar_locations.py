@@ -93,6 +93,23 @@ MENDOZA_CABANAS_ZONES: list[CampaignZone] = [
     CampaignZone("men-los-molles", "Los Molles", -35.2000, -69.9333, 10, 12),
 ]
 
+# Base Córdoba v1: Punilla + Calamuchita (misma campaña, base_name=Córdoba).
+CORDOBA_CABANAS_ZONES: list[CampaignZone] = [
+    # Valle de Punilla
+    CampaignZone("cba-carlos-paz", "Villa Carlos Paz", -31.4241, -64.4974, 14, 12),
+    CampaignZone("cba-cosquin", "Cosquín", -31.2450, -64.4650, 12, 12),
+    CampaignZone("cba-la-falda", "La Falda", -31.0936, -64.4828, 12, 12),
+    CampaignZone("cba-la-cumbre", "La Cumbre", -30.9822, -64.4911, 12, 12),
+    CampaignZone("cba-capilla", "Capilla del Monte", -30.8567, -64.5261, 12, 12),
+    CampaignZone("cba-valle-hermoso", "Valle Hermoso / Huerta Grande", -31.0950, -64.4850, 12, 12),
+    # Valle de Calamuchita
+    CampaignZone("cba-vgb", "Villa General Belgrano", -31.9767, -64.5603, 14, 12),
+    CampaignZone("cba-santa-rosa", "Santa Rosa de Calamuchita", -32.0667, -64.5333, 14, 12),
+    CampaignZone("cba-embalse", "Embalse / Villa Rumipal", -32.2000, -64.4333, 14, 11),
+    CampaignZone("cba-los-reartes", "Los Reartes / Villa Berna", -31.9100, -64.6500, 12, 12),
+    CampaignZone("cba-cumbrecita", "La Cumbrecita", -31.8972, -64.7722, 10, 13),
+]
+
 # Mantener presets de mapa alineados con zonas nuevas de campaña.
 _EXTRA_MENDOZA_PRESETS = [
     LocationPreset(z.id, f"Mendoza · {z.label}", z.lat, z.lng, z.zoom, "city")
@@ -101,11 +118,20 @@ _EXTRA_MENDOZA_PRESETS = [
 ]
 MENDOZA_DEPARTMENTS = list(MENDOZA_DEPARTMENTS) + _EXTRA_MENDOZA_PRESETS
 
-ALL_PRESETS: list[LocationPreset] = AR_PROVINCES + MENDOZA_DEPARTMENTS
+_EXTRA_CORDOBA_PRESETS = [
+    LocationPreset(z.id, f"Córdoba · {z.label}", z.lat, z.lng, z.zoom, "city")
+    for z in CORDOBA_CABANAS_ZONES
+]
+
+ALL_PRESETS: list[LocationPreset] = AR_PROVINCES + MENDOZA_DEPARTMENTS + _EXTRA_CORDOBA_PRESETS
 
 
 def list_mendoza_cabanas_zones() -> list[CampaignZone]:
     return list(MENDOZA_CABANAS_ZONES)
+
+
+def list_cordoba_cabanas_zones() -> list[CampaignZone]:
+    return list(CORDOBA_CABANAS_ZONES)
 
 
 def match_presets(query: str, *, limit: int = 8) -> list[LocationPreset]:

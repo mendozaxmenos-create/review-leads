@@ -231,6 +231,28 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 2. Sección **Respuestas rápidas** → Copiar pitch “Más info” (incluye `https://review-leads.onrender.com/demo`)  
 3. No responder por Twilio (ahorra costo por mensaje)
 
+### Base Córdoba · cabañas (misma campaña)
+
+Misma campaña / dashboard (`/campaign`), nueva **`base=Córdoba`**. Cobertura v1: **Punilla + Calamuchita** (11 zonas).
+
+```bash
+# 1) Barrido Places
+.venv\Scripts\python -m scripts.cordoba_cabanas_sweep --mode directory
+
+# 2) Depurar + ETL
+.venv\Scripts\python -m scripts.depurar_cordoba_cabanas --no-crm
+.venv\Scripts\python -m scripts.etl_cordoba_cabanas
+
+# 3) Sync CRM (no pisa el clean CSV de Mendoza)
+.venv\Scripts\python -c "from pathlib import Path; from app.services.mendoza_campaign import sync_etl_clean_to_crm; print(sync_etl_clean_to_crm(csv_path=Path('data/exports/cordoba-cabanas-etl-clean.csv'), base_name='Córdoba'))"
+```
+
+Salidas: `data/exports/cordoba-cabanas-*.csv`, `cordoba-cabanas-etl-clean.csv`, `campaign-Córdoba.csv`.  
+API: `GET /api/campaigns/cordoba-cabanas/zones`, `POST /api/campaigns/cordoba-cabanas`.  
+Upload UI: base **Córdoba** → escribe `campaign-Córdoba.csv` **sin** sobrescribir `mendoza-cabanas-etl-clean.csv`.
+
+Zonas: Villa Carlos Paz, Cosquín, La Falda, La Cumbre, Capilla del Monte, Valle Hermoso/Huerta Grande, Villa General Belgrano, Santa Rosa de Calamuchita, Embalse/Rumipal, Los Reartes/Villa Berna, La Cumbrecita.
+
 ### Bot de ventas
 
 1. Clic en **Bot de ventas** en una tarjeta → panel lateral
@@ -353,7 +375,7 @@ app/
 │                        campaign_send, reply_classify, demo_booking_bot
 ├── data/                services, business_types, cabanas_filter, outreach_guidelines, ar_locations
 └── static/              index.html, campaign.html, demo.html, admin.html, js/, css/
-scripts/                 etl/sweep/send batches, create_wa_template, run_mendoza_remaining.bat, run_demo_tunnel.bat
+scripts/                 etl/sweep Mendoza+Córdoba, create_wa_template, run_mendoza_remaining.bat, run_demo_tunnel.bat
 tools/                   cloudflared.exe (túnel local opcional)
 Dockerfile
 fly.toml                 Fly.io — trial vencido
@@ -478,6 +500,7 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Demo `/demo` pública; dashboards con `DASHBOARD_ACCESS_TOKEN`
 - [x] Mirror público `mendozaxmenos-create/review-leads` para deploy (GitHub flaggeado)
 - [x] Pitch “más info” con link Render
+- [x] Base Córdoba Punilla+Calamuchita (misma campaña, `base=Córdoba`)
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
 - [ ] Email desde web del negocio (Google no expone email)
@@ -487,6 +510,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Base Córdoba (Punilla+Calamuchita): zonas, sweep/ETL, sync multi-base sin pisar Mendoza |
 | Ago 2026 | Render live, demo pública, dashboards con token, mirror deploy, UptimeRobot, pitch más-info |
 | Ago 2026 | Demo interactiva (cabañas, seña MP/transferencia simulada), share-link, rate limit |
 | Ago 2026 | Clasificación inbound, KPIs clickeables, multi-base + no reenvío |
