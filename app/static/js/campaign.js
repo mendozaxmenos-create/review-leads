@@ -37,7 +37,7 @@ const QUICK_REPLIES = [
   {
     id: "pitch",
     title: "Más info — pitch con demo",
-    body: `Cómo estás, Soy Gustavo de SofIA - Desarrollo de Software, te cuento rápido.
+    body: `Cómo estás, Soy Gustavo de SofIA - Desarrollo de Software. Te escribo por {{nombre}}, te cuento rápido.
 
 SofIA arma un bot de WhatsApp para {{nombre}}: el huésped escribe a tu número y el bot atiende solo — fechas, disponibilidad, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche ni el finde.
 
