@@ -196,8 +196,7 @@ function waLink(phone) {
 }
 
 function placeToken() {
-  const name = (els.replyPlaceName?.value || "").trim();
-  return name || "tu complejo";
+  return (els.replyPlaceName?.value || "").trim();
 }
 
 function demoLink() {
@@ -224,8 +223,16 @@ async function loadShareLink() {
   }
 }
 
+function setReplyPlaceName(name) {
+  const n = (name || "").trim();
+  if (!els.replyPlaceName || !n) return;
+  els.replyPlaceName.value = n;
+  renderQuickReplies();
+}
+
 function fillReply(template) {
-  return template.replaceAll("{{nombre}}", placeToken()).replaceAll("{{demo_url}}", demoLink());
+  const nombre = placeToken() || "XXXXXX";
+  return template.replaceAll("{{nombre}}", nombre).replaceAll("{{demo_url}}", demoLink());
 }
 
 async function copyText(text, btn) {
@@ -243,13 +250,16 @@ async function copyText(text, btn) {
 
 function renderQuickReplies() {
   if (!els.quickReplies) return;
+  const hasName = Boolean(placeToken());
   els.quickReplies.innerHTML = QUICK_REPLIES.map((r) => {
     const filled = fillReply(r.body);
+    const needsName = r.id === "pitch" && !hasName;
     return `<article class="quick-reply-card" data-reply-id="${escapeHtml(r.id)}">
       <div class="quick-reply-head">
         <h3>${escapeHtml(r.title)}</h3>
         <button type="button" class="btn btn-sm btn-primary" data-copy-reply="${escapeHtml(r.id)}">Copiar</button>
       </div>
+      ${needsName ? `<p class="map-hint">Tocá <strong>Usar nombre</strong> en el lead (o escribí el complejo arriba) antes de copiar.</p>` : ""}
       <pre>${escapeHtml(filled)}</pre>
     </article>`;
   }).join("");
@@ -258,6 +268,11 @@ function renderQuickReplies() {
     btn.addEventListener("click", () => {
       const item = QUICK_REPLIES.find((x) => x.id === btn.dataset.copyReply);
       if (!item) return;
+      if (item.id === "pitch" && !placeToken()) {
+        showError("Falta el nombre del complejo. Tocá «Usar nombre» en el lead o completá el campo «Nombre del complejo».");
+        els.replyPlaceName?.focus();
+        return;
+      }
       copyText(fillReply(item.body), btn);
     });
   });
@@ -511,11 +526,15 @@ function bindLeadRowActions(tbody) {
   });
   tbody.querySelectorAll("[data-use-name]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (els.replyPlaceName) {
-        els.replyPlaceName.value = btn.dataset.useName || "";
-        renderQuickReplies();
-        els.replyPlaceName.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      setReplyPlaceName(btn.dataset.useName || "");
+      els.replyPlaceName?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
+  tbody.querySelectorAll("a.btn-whatsapp-primary").forEach((a) => {
+    a.addEventListener("click", () => {
+      const row = a.closest("tr");
+      const nameBtn = row?.querySelector("[data-use-name]");
+      if (nameBtn?.dataset.useName) setReplyPlaceName(nameBtn.dataset.useName);
     });
   });
 }
