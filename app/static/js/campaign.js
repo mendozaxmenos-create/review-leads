@@ -36,15 +36,15 @@ async function api(path, opts = {}) {
 const QUICK_REPLIES = [
   {
     id: "pitch",
-    title: "Pitch único — convertir (con demo)",
-    body: `Hola, soy Gustavo de SofIA.
+    title: "Más info — pitch con demo",
+    body: `Dale, te cuento rápido.
 
-Te armo un bot de WhatsApp para {{nombre}}: el huésped escribe a tu número y el bot atiende solo — disponibilidad, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). Vos recibís el aviso ordenado, sin estar pegado al celular de noche ni el finde.
+SofIA arma un bot de WhatsApp para {{nombre}}: el huésped escribe a tu número y el bot atiende solo — fechas, disponibilidad, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche ni el finde.
 
-Probá cómo se siente (demo interactiva, 2 minutos):
+Probá la demo vos mismo (2 min, como si fueras un huésped):
 {{demo_url}}
 
-Escribí como si fueras un huésped: pedí fechas, elegí cabaña y simulá la seña.
+Pedí fechas, elegí cabaña y simulá la seña. Es exactamente la experiencia que tendrían tus reservas.
 
 Valor: $19.000/mes. Lo dejamos funcionando con tus precios, reglas y check-in.
 
@@ -175,7 +175,10 @@ function placeToken() {
 function demoLink() {
   const custom = (els.replyDemoUrl?.value || "").trim();
   if (custom) return custom.replace(/\/$/, "");
-  return `${window.location.origin}/demo`;
+  if (typeof window !== "undefined" && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) {
+    return `${window.location.origin}/demo`;
+  }
+  return "https://review-leads.onrender.com/demo";
 }
 
 async function loadShareLink() {
