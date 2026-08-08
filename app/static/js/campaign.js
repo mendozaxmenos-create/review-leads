@@ -96,6 +96,25 @@ const els = {
 let activeKpi = null;
 /** @type {Array|null} */
 let allPipelineLeads = null;
+/** @type {Array} */
+let cachedResponded = [];
+/** @type {Array} */
+let cachedFollowUp = [];
+
+function selectedBaseName() {
+  return (els.basesSelect?.value || els.baseName?.value || "").trim();
+}
+
+function filterRowsByBase(rows) {
+  const base = selectedBaseName();
+  const list = Array.isArray(rows) ? rows : [];
+  if (!base) return list;
+  const want = base.toLowerCase();
+  return list.filter((r) => {
+    const b = ((r.base || r.lead?.base || "").trim() || "Mendoza").toLowerCase();
+    return b === want;
+  });
+}
 
 const KPI_CARDS = [
   {
@@ -305,9 +324,13 @@ async function onBaseSelectChange() {
       els.basesHint.textContent =
         "Primero elegí una base; después vas a ver solo las zonas contactadas de esa base.";
     }
+    renderResponded();
+    renderFollowUp();
     return;
   }
   if (els.baseName) els.baseName.value = val;
+  renderResponded();
+  renderFollowUp();
   if (els.sentZonesWrap) els.sentZonesWrap.hidden = false;
   if (els.sentZonesSelect) {
     els.sentZonesSelect.innerHTML = `<option value="">Cargando zonas…</option>`;
@@ -559,7 +582,7 @@ function renderLeadActionRows(rows, tbody, { emptyText, showHandoff }) {
             ? `<span class="reply-meta">Ya en seguimiento</span>`
             : "";
       return `<tr class="${rowClass}">
-        <td>${escapeHtml(r.place_name)}</td>
+        <td>${escapeHtml(r.place_name)}${r.base ? `<div class="reply-meta">${escapeHtml(r.base)}</div>` : ""}</td>
         <td>${escapeHtml(r.zone || "")}</td>
         <td><span class="badge ${replyBadgeClass(kind)}" title="${escapeHtml(label)}">${escapeHtml(label)}</span></td>
         <td>${formatReplyCell(r)}</td>
@@ -577,8 +600,12 @@ function renderLeadActionRows(rows, tbody, { emptyText, showHandoff }) {
 }
 
 function renderResponded(respondedRows, followUpRows = []) {
-  const list = Array.isArray(respondedRows) ? respondedRows : [];
-  const follow = Array.isArray(followUpRows) ? followUpRows : [];
+  if (respondedRows !== undefined) cachedResponded = Array.isArray(respondedRows) ? respondedRows : [];
+  if (followUpRows !== undefined) cachedFollowUp = Array.isArray(followUpRows) ? followUpRows : [];
+  const list = filterRowsByBase(cachedResponded);
+  const follow = filterRowsByBase(cachedFollowUp);
+  const base = selectedBaseName();
+  const baseSuffix = base ? ` · ${base}` : "";
 
   const fromResponded = list.filter(isPriorityReply);
   const otherResponded = list.filter((r) => !isPriorityReply(r) && r.reply_thread_kind !== "auto_only");
@@ -598,11 +625,13 @@ function renderResponded(respondedRows, followUpRows = []) {
   const autoOnly = list.filter((r) => r.reply_thread_kind === "auto_only");
 
   renderLeadActionRows(priorityRows, els.priorityBody, {
-    emptyText: "Nadie humano pendiente — cuando alguien retome después del bot, aparece acá",
+    emptyText: base
+      ? `Ningún humano pendiente en «${base}» (Córdoba recién enviada suele caer primero en auto-reply)`
+      : "Nadie humano pendiente — cuando alguien retome después del bot, aparece acá",
     showHandoff: true,
   });
   renderLeadActionRows(autoOnly, els.respondedBody, {
-    emptyText: "Ningún auto-reply pendiente",
+    emptyText: base ? `Ningún auto-reply pendiente en «${base}»` : "Ningún auto-reply pendiente",
     showHandoff: true,
   });
   if (els.prioritySection) {
@@ -611,15 +640,25 @@ function renderResponded(respondedRows, followUpRows = []) {
     if (title) {
       title.textContent =
         priorityRows.length > 0
-          ? `Prioridad — escribió un humano (${priorityRows.length})`
-          : "Prioridad — escribió un humano";
+          ? `Prioridad — escribió un humano (${priorityRows.length})${baseSuffix}`
+          : `Prioridad — escribió un humano${baseSuffix}`;
     }
+  }
+  const autoHeading = els.respondedBody?.closest("section")?.querySelector("h2");
+  if (autoHeading) {
+    autoHeading.textContent =
+      autoOnly.length > 0
+        ? `Solo auto-reply — bot contestó (${autoOnly.length})${baseSuffix}`
+        : `Solo auto-reply — bot contestó${baseSuffix}`;
   }
 }
 
 function renderFollowUp(rows) {
-  renderLeadActionRows(rows, els.followupBody, {
-    emptyText: "Todavía no marcaste ninguno",
+  if (rows !== undefined) cachedFollowUp = Array.isArray(rows) ? rows : [];
+  renderLeadActionRows(filterRowsByBase(cachedFollowUp), els.followupBody, {
+    emptyText: selectedBaseName()
+      ? `Todavía no marcaste ninguno en «${selectedBaseName()}»`
+      : "Todavía no marcaste ninguno",
     showHandoff: false,
   });
 }

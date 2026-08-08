@@ -484,6 +484,7 @@ async def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
                 "place_id": r["place_id"],
                 "place_name": lead.get("place_name"),
                 "zone": lead.get("zone"),
+                "base": lead.get("base") or "Mendoza",
                 "phone": phone,
                 "status": r["status"],
                 "notes": r["notes"],
