@@ -1,5 +1,6 @@
 @echo off
-REM Tunel gratis Cloudflare → tu demo local (PC debe estar encendida)
+REM Tunel gratis Cloudflare → demo local (PC encendida). Preferí Render prod:
+REM   https://review-leads.onrender.com/demo
 REM Uso: scripts\run_demo_tunnel.bat
 cd /d "%~dp0.."
 if not exist tools\cloudflared.exe (

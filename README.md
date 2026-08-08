@@ -1,13 +1,19 @@
-# Review Leads
+# Review Leads / SofIA
 
-App para buscar reseñas de Google en una zona geográfica, clasificarlas con IA y detectar leads potenciales para tus proyectos (SofIA / desarrollo con Cursor).
+App para buscar reseñas de Google, clasificar leads con IA y operar la campaña Mendoza (cabañas): Twilio → handoff WhatsApp personal → demo del bot de reservas.
 
 | Entorno | URL / estado |
 |---------|----------------|
-| **Local** | http://127.0.0.1:8000 — funcional |
-| **Fly.io** | https://review-leads.fly.dev/ — **suspendido** (trial terminado; requiere tarjeta o redeploy) |
-| **Render** | Alternativa free documentada abajo |
-| **Repo** | https://github.com/schejtergustavo/review-leads |
+| **Producción (Render free)** | https://review-leads.onrender.com — **activo** |
+| **Demo para leads** | https://review-leads.onrender.com/demo — **pública** (sin token) |
+| **Dashboard campaña** | https://review-leads.onrender.com/campaign?k=`DASHBOARD_ACCESS_TOKEN` |
+| **CRM** | https://review-leads.onrender.com/admin?k=`DASHBOARD_ACCESS_TOKEN` |
+| **Local** | http://127.0.0.1:8000 |
+| **Repo deploy (público)** | https://github.com/mendozaxmenos-create/review-leads (`main`) |
+| **Repo original** | https://github.com/schejtergustavo/review-leads — puede no ser clonable por terceros (cuenta GitHub restringida); Render usa el **mirror** |
+| **Fly.io** | Suspendido (trial vencido) |
+
+Keep-alive: UptimeRobot → `GET https://review-leads.onrender.com/health` cada 5 min.
 
 ## Qué hace
 
@@ -57,6 +63,9 @@ Editá `.env` (ver `.env.example`):
 | `TWILIO_TEMPLATE_SID` | Content SID plantilla marketing aprobada (`HX…`) |
 | `TWILIO_SEND_ENABLED` | `true` = envío live; `false` = dry-run |
 | `TWILIO_SEND_DELAY_SECONDS` | Pausa entre mensajes (default `3`) |
+| `DEMO_PUBLIC_URL` | Origen público sin path, ej. `https://review-leads.onrender.com` (pitch / share-link) |
+| `DASHBOARD_ACCESS_TOKEN` | Si está seteado, protege `/campaign` y `/admin` (`?k=` o header `X-Dashboard-Token`) |
+| `DEMO_ACCESS_TOKEN` | Legacy / ignorado — la demo es pública |
 
 ## Ejecutar
 
@@ -67,11 +76,13 @@ Editá `.env` (ver `.env.example`):
 | Ruta | Descripción |
 |------|-------------|
 | http://127.0.0.1:8000 | UI principal — generar leads |
-| http://127.0.0.1:8000/campaign | **Dashboard campaña Mendoza · cabañas** (Twilio + handoff) |
-| http://127.0.0.1:8000/demo | **Demo interactiva del bot de reservas** (sin Twilio; para mostrar a leads) |
+| http://127.0.0.1:8000/campaign | Dashboard campaña Mendoza (local sin token; en prod `?k=`) |
+| http://127.0.0.1:8000/demo | Demo interactiva del bot (pública; misma UX que en Render) |
 | http://127.0.0.1:8000/admin | Panel CRM |
 | http://127.0.0.1:8000/docs | API interactiva (Swagger) |
 | http://127.0.0.1:8000/health | Health check |
+
+Túnel local opcional (PC encendida): `scripts\run_demo_tunnel.bat` → `tools\cloudflared.exe` → URL `*.trycloudflare.com`.
 
 ## Usar la interfaz
 
@@ -151,23 +162,28 @@ Inbound WhatsApp se clasifica en `app/services/reply_classify.py`:
 
 - Upload/sync CSV, lotes dry-run/live (**Enviar lote** = hasta N pendientes; saltea ya enviados)
 - Tabla Contestaron + **Abrir en mi WhatsApp**
-- **Respuestas rápidas** de venta (demo, “pásame info”, objeciones, etc.) con `{{nombre}}` / `{{demo_url}}` + Copiar
-- Link a **Demo bot** (`/demo`)
+- **Respuestas rápidas** de venta: pitch “más info” con `{{nombre}}` / `{{demo_url}}` + Copiar
+- Link a **Demo bot** (`https://review-leads.onrender.com/demo`)
 - Log técnico de Twilio en un `<details>` colapsado
 
 #### Demo del bot de reservas (`/demo`)
 
-Página para **mostrar el producto** a un dueño de complejo (sin costo Twilio):
+Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin token):
 
 | Pieza | Detalle |
 |-------|---------|
-| UI | Chat + chips (finde, personas, nombre, precio…) + calendario entrada/salida |
-| API | `POST /api/demo/session`, `POST /api/demo/chat` |
-| Bot | `app/services/demo_booking_bot.py` — OpenAI (`gpt-4o-mini`) + fallback por reglas |
-| Sesión | En memoria (~24 turnos); si el server recarga, la UI reinicia sola |
-| Complejo | Nombre inventado al azar (no usa lodges reales de la base) |
+| URL prod | https://review-leads.onrender.com/demo |
+| UI | Chat huésped + chips/calendario + panel CRM dueño (simulado) |
+| Flujo | Fechas → personas → cabañas → nombre → seña (transferencia / Mercado Pago simulado) |
+| API | `POST /api/demo/session`, `/chat`, `/simulate-mp-payment`, `/approve-transfer`, `/reject-transfer` |
+| Share | `GET /api/demo/share-link` → arma URL si hay `DEMO_PUBLIC_URL` |
+| Bot | `app/services/demo_booking_bot.py` (máquina de estados + OpenAI opcional) |
+| Sesión | En memoria; si el server recarga, reiniciá el chat |
+| Rate limit | ~20 sesiones nuevas / IP / hora |
 
-Compartir con un lead: URL pública (`/demo` detrás de ngrok/Fly). Local solo sirve en tu PC.
+**Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”. Incluye el link público y precio **$19.000/mes**.
+
+Nunca pegues `http://127.0.0.1` en el pitch: el lead no puede abrirlo.
 
 #### Pipeline de datos
 
@@ -212,7 +228,7 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 #### Handoff (después de que contestan)
 
 1. Dashboard → **Prioridad / Contestaron** → Abrir en mi WhatsApp / Usar nombre  
-2. Sección **Respuestas rápidas** → Copiar pitch de seguimiento (incluye link a `/demo`)  
+2. Sección **Respuestas rápidas** → Copiar pitch “Más info” (incluye `https://review-leads.onrender.com/demo`)  
 3. No responder por Twilio (ahorra costo por mensaje)
 
 ### Bot de ventas
@@ -299,8 +315,12 @@ curl -X POST http://127.0.0.1:8000/api/search \
 
 | Método | Ruta |
 |--------|------|
+| `GET` | `/api/demo/share-link` |
 | `POST` | `/api/demo/session` |
 | `POST` | `/api/demo/chat` |
+| `POST` | `/api/demo/simulate-mp-payment` |
+| `POST` | `/api/demo/approve-transfer` |
+| `POST` | `/api/demo/reject-transfer` |
 
 ### Historial y CRM
 
@@ -323,19 +343,21 @@ Servicios custom: `POST /api/projects/custom` o panel “Servicio propio”.
 
 ```
 app/
-├── main.py
+├── main.py              rutas HTML + middleware DASHBOARD_ACCESS_TOKEN
+├── auth_gate.py         gate /campaign /admin (demo abierta)
 ├── config.py
-├── models/          schemas.py, lead_status.py
-├── routers/         search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
-├── db/store.py      SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
-├── services/        places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
-│                    campaign_send, reply_classify, demo_booking_bot
-├── data/            services, business_types, cabanas_filter, outreach_guidelines, ar_locations
-└── static/          index.html, campaign.html, demo.html, admin.html, js/, css/, sofia-wa-avatar.png
-scripts/             etl/sweep/send batches, create_wa_template, run_mendoza_remaining.bat
+├── models/              schemas.py, lead_status.py
+├── routers/             search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
+├── db/store.py          SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
+├── services/            places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
+│                        campaign_send, reply_classify, demo_booking_bot
+├── data/                services, business_types, cabanas_filter, outreach_guidelines, ar_locations
+└── static/              index.html, campaign.html, demo.html, admin.html, js/, css/
+scripts/                 etl/sweep/send batches, create_wa_template, run_mendoza_remaining.bat, run_demo_tunnel.bat
+tools/                   cloudflared.exe (túnel local opcional)
 Dockerfile
-fly.toml             Fly.io (región gru) — trial vencido hasta agregar billing
-render.yaml          Render Blueprint
+fly.toml                 Fly.io — trial vencido
+render.yaml              Blueprint / env de referencia (deploy real suele ser Web Service desde el mirror)
 ```
 
 ## Filtros de calidad (API)
@@ -348,86 +370,61 @@ render.yaml          Render Blueprint
 | `max_places` | `24` | Lugares a escanear (8–60) |
 | `use_cache` | `true` | Caché 24 h |
 
-## Producción — Fly.io
+## Producción — Render (activo)
 
-App: `review-leads` · Región: `gru` · URL: https://review-leads.fly.dev/
+**URL:** https://review-leads.onrender.com  
+**Código que despliega Render:** repo público  
+https://github.com/mendozaxmenos-create/review-leads · branch `main`
 
-### Estado actual (jun 2026)
+> El repo `schejtergustavo/review-leads` puede devolver 404 a clones anónimos (cuenta GitHub restringida). Por eso el deploy usa el **mirror** `mendozaxmenos-create`.
 
-El **trial de Fly.io terminó**. La app queda suspendida hasta:
+### Alta / redeploy
 
-1. Agregar tarjeta en https://fly.io/dashboard/billing (pay-as-you-go, ~USD 0–5/mes para esta app), **o**
-2. Migrar a Render (abajo)
+1. https://render.com → cuenta con **email** (no hace falta GitHub OAuth)
+2. **New → Web Service → Public Git Repository**  
+   `https://github.com/mendozaxmenos-create/review-leads`
+3. Branch `main` · Runtime **Docker** · Plan **Free** · Health `/health`
+4. Env vars mínimas:
+   - `OPENAI_API_KEY` (y `GOOGLE_PLACES_API_KEY` si usás búsqueda)
+   - `DEMO_PUBLIC_URL=https://review-leads.onrender.com`
+   - `DASHBOARD_ACCESS_TOKEN=<secreto largo>` (solo vos)
+   - `DATABASE_PATH=/tmp/review-leads.db`
+   - `DEBUG=false`
+5. Deploy. Tras cambios locales: push al mirror y **Manual Deploy** en Render si no hay auto-deploy.
 
-### Redeploy en Fly (cuando tengas billing)
-
-```bash
-fly auth login
-fly scale count 1 -a review-leads    # CRÍTICO: 1 sola máquina para SQLite
-fly secrets set \
-  GOOGLE_PLACES_API_KEY=tu_clave \
-  OPENAI_API_KEY=tu_clave \
-  OPENAI_MODEL=gpt-4o-mini \
-  OUTREACH_SENDER_NAME=Gustavo \
-  OUTREACH_SENDER_COMPANY=SofIA \
-  DATABASE_PATH=/tmp/review-leads.db \
-  DEBUG=false \
-  -a review-leads
-fly deploy --depot=false -a review-leads
+```powershell
+# Push al mirror (cuenta mendozaxmenos-create)
+gh auth switch -u mendozaxmenos-create
+git push mirror HEAD:main
+gh auth switch -u schejtergustavo
 ```
 
-Si el builder Depot falla, usá siempre `--depot=false`.
+Remote local típico: `mirror` → `https://github.com/mendozaxmenos-create/review-leads.git`
 
-### Limitaciones Fly
+### URLs de uso diario
 
-| Qué | Detalle |
-|-----|---------|
-| SQLite | Efímero en `/tmp` — CRM/historial se pierde al reiniciar |
-| Multi-máquina | **No usar** — cada máquina tiene su propia DB |
-| Cold start | ~30–60 s tras inactividad (con `min_machines_running = 1` reduce) |
+| Quién | Link |
+|-------|------|
+| Lead (pitch) | https://review-leads.onrender.com/demo |
+| Vos — campaña | `https://review-leads.onrender.com/campaign?k=<DASHBOARD_ACCESS_TOKEN>` |
+| Vos — CRM | `https://review-leads.onrender.com/admin?k=<DASHBOARD_ACCESS_TOKEN>` |
+| Health / UptimeRobot | https://review-leads.onrender.com/health |
 
-Persistencia real: volumen Fly en `/data` o PostgreSQL externo.
+### Keep-alive UptimeRobot (gratis)
 
-## Producción — Render (free, sin tarjeta)
-
-1. https://render.com → login con GitHub
-2. **New → Blueprint** → repo `schejtergustavo/review-leads`
-3. Completar secrets que pide `render.yaml`:
-   - `GOOGLE_PLACES_API_KEY`
-   - `OPENAI_API_KEY`
-   - `NOMINATIM_CONTACT_EMAIL` (opcional)
-4. **Apply** → esperar build Docker (3–8 min)
-
-URL típica: `https://review-leads.onrender.com`
-
-Variables ya definidas en `render.yaml`: `OUTREACH_SENDER_*`, `DATABASE_PATH=/tmp/review-leads.db`, health `/health`, `DEMO_PUBLIC_URL`. Seteá `DASHBOARD_ACCESS_TOKEN` a mano.
-
-### Demo pública para leads (`/demo`)
-
-1. Pitch (público, sin token): `https://review-leads.onrender.com/demo`
-2. En `/campaign` el campo **URL demo** se completa si el server tiene `DEMO_PUBLIC_URL`
-3. Dashboard SofIA: seteá `DASHBOARD_ACCESS_TOKEN` y abrí `/campaign?k=…` / `/admin?k=…`
-
-### Keep-alive con UptimeRobot (gratis, para que no duerma)
-
-El plan free de Render duerme ~15 min sin tráfico. Para dejarlo “siempre listo”:
-
-1. https://uptimerobot.com → cuenta free
-2. **Add New Monitor**
-   - Monitor Type: **HTTP(s)**
-   - URL: `https://review-leads.onrender.com/health`
-   - Interval: **5 minutes**
-3. Guardar
-
-UptimeRobot pega cada 5 min → Render no duerme. Costo: $0.
+El plan free duerme ~15 min sin tráfico. Monitor HTTP(s) cada **5 minutes** a `/health` → Render no duerme. Costo: $0.
 
 | Qué | Render free |
 |-----|-------------|
 | Costo | $0 |
-| Sleep | Tras ~15 min sin tráfico (~1 min despertar) — mitigar con UptimeRobot |
+| Sleep | Mitigar con UptimeRobot |
 | SQLite | Efímero en `/tmp` |
 | Demo | `/demo` público |
-| Dashboard | `/campaign?k=…` con `DASHBOARD_ACCESS_TOKEN` |
+| Dashboard | Protegido con `DASHBOARD_ACCESS_TOKEN` |
+
+## Producción — Fly.io (legacy)
+
+App `review-leads` · https://review-leads.fly.dev/ — **suspendida** (trial terminado). Preferí Render. Redeploy solo si agregás billing en Fly y `fly scale count 1` (una máquina por SQLite).
 
 ## Docker local
 
@@ -463,23 +460,26 @@ Además del modo **leads por reseñas**, existe el modo **Listar negocios (direc
 
 ```bash
 cd review-leads
-git pull origin main
+git pull mirror main          # código de producción / deploy
 .venv\Scripts\activate
 pip install -r requirements.txt   # si hubo cambios
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-1. `.env` con Google + OpenAI + `OUTREACH_SENDER_*`
-2. http://127.0.0.1:8000 → modo **Listar negocios** → localidad → rubro **Hoteles** → **Listar / generar**
-3. WhatsApp / CRM en http://127.0.0.1:8000/admin
-4. Redeploy Fly o Render cuando quieras producción pública
+1. `.env` con Google + OpenAI + `OUTREACH_SENDER_*` (+ Twilio si enviás)
+2. Campaña: http://127.0.0.1:8000/campaign  
+3. Demo local: http://127.0.0.1:8000/demo  
+4. Prod leads: https://review-leads.onrender.com/demo  
+5. Tras cambios: `git push mirror HEAD:main` → redeploy Render
 
 ## Pendiente / roadmap
 
-- [x] Deploy en Render free + keep-alive UptimeRobot (`/health` cada 5 min)
+- [x] Deploy Render free + UptimeRobot keep-alive
+- [x] Demo `/demo` pública; dashboards con `DASHBOARD_ACCESS_TOKEN`
+- [x] Mirror público `mendozaxmenos-create/review-leads` para deploy (GitHub flaggeado)
+- [x] Pitch “más info” con link Render
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
-- [x] Proteger `/campaign` y `/admin` con `DASHBOARD_ACCESS_TOKEN` (demo `/demo` pública)
 - [ ] Email desde web del negocio (Google no expone email)
 - [ ] Batch IA — varias reseñas en una llamada OpenAI
 
@@ -487,10 +487,11 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
-| Ago 2026 | Clasificación inbound (prioridad / auto-reply), KPIs clickeables, multi-base + no reenvío, demo `/demo` con chips/calendario |
-| Ago 2026 | Dashboard `/campaign`, Twilio WA prod, ETL Mendoza, handoff + respuestas rápidas, lotes programados |
+| Ago 2026 | Render live, demo pública, dashboards con token, mirror deploy, UptimeRobot, pitch más-info |
+| Ago 2026 | Demo interactiva (cabañas, seña MP/transferencia simulada), share-link, rate limit |
+| Ago 2026 | Clasificación inbound, KPIs clickeables, multi-base + no reenvío |
+| Ago 2026 | Dashboard `/campaign`, Twilio WA, ETL Mendoza, handoff + respuestas rápidas |
 | Ago 2026 | Modo directorio: listar hoteles/rubro por localidad + WA + contactado |
 | Jun 2026 | Modo descubrimiento multi-rubro, geocodificación AR, filtros gobierno |
 | Jun 2026 | Outreach SofIA, reseñas Google, CTA sin reunión, `solution_value` |
-| Jun 2026 | Panel `/admin`, Fly.io, fix CRM y `.gitignore` (`app/data/`) |
-| Jun 2026 | Auto-estado al contactar, fix contadores CRM, 1 máquina Fly |
+| Jun 2026 | Panel `/admin`, Fly.io, fix CRM y `.gitignore` |

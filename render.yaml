@@ -1,5 +1,6 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
-# Conectar repo: schejtergustavo/review-leads → New → Blueprint
+# Render — referencia de env / Blueprint
+# Deploy real: Public Git → https://github.com/mendozaxmenos-create/review-leads (main)
+# Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: review-leads
