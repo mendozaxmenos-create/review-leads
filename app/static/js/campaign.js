@@ -739,16 +739,22 @@ async function uploadCsv() {
 async function sendWa({ dryRun }) {
   hideError();
   const limit = Number(els.batchSize.value) || 10;
+  const baseName = (els.basesSelect?.value || els.baseName?.value || "").trim();
+  if (!baseName) {
+    showError("Elegí una base en «Bases en CRM» (ej. Córdoba) antes de enviar.");
+    return;
+  }
   if (!dryRun) {
     const ok = window.confirm(
       `¿Enviar LIVE hasta ${limit} WhatsApp por Twilio?\n\n` +
-        `• Solo a pendientes (no reenvía si ya salió en Mendoza u otra base)\n` +
+        `• Base: ${baseName}\n` +
+        `• Solo a pendientes (no reenvía si ya salió en otra base)\n` +
         `• Es el primer mensaje (plantilla)\n` +
         `• Dry-run no manda nada — este sí cobra/envía`
     );
     if (!ok) return;
   }
-  setLoading(true, dryRun ? "Dry-run…" : `Enviando ${limit}…`);
+  setLoading(true, dryRun ? "Dry-run…" : `Enviando ${limit} (${baseName})…`);
   try {
     const data = await api("/api/campaigns/mendoza-cabanas/send-wa", {
       method: "POST",
@@ -757,7 +763,7 @@ async function sendWa({ dryRun }) {
         limit,
         skip_already_sent: true,
         mark_contacted: true,
-        base_name: (els.basesSelect?.value || els.baseName?.value || "").trim() || undefined,
+        base_name: baseName,
       }),
     });
     els.summary.hidden = false;
