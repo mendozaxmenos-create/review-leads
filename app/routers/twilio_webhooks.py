@@ -76,28 +76,41 @@ async def whatsapp_inbound(
         thread = classify_inbound_thread(inbound_bodies)
         reply_note = note_for_inbound(kind, body, thread_kind=thread["thread_kind"])
 
+        status_now = lead_row.get("status") or ""
         if kind == "stop":
             store.update_saved_lead(
                 lead_row["id"],
                 status="discarded",
                 notes=(note + (" | " if note else "") + reply_note),
             )
-        elif lead_row.get("status") in ("new", "contacted", "follow_up"):
+            status_now = "discarded"
+        elif status_now in ("new", "contacted", "follow_up"):
             # Auto o humano: entra a por-contestar; el UI explica el tipo
             store.update_saved_lead(
                 lead_row["id"],
                 status="responded",
                 notes=(note + (" | " if note else "") + reply_note),
             )
-        elif lead_row.get("status") == "responded":
+            status_now = "responded"
+        elif status_now == "responded":
             # Refrescar nota con el último tipo (humano retomó, otro auto, etc.)
             store.update_saved_lead(
                 lead_row["id"],
                 status="responded",
                 notes=(note + (" | " if note else "") + reply_note),
             )
+        elif status_now == "discarded" and kind != "stop":
+            # Mantener descartado; solo anotar el mensaje (ej. «gracias» post-STOP)
+            store.update_saved_lead(
+                lead_row["id"],
+                status="discarded",
+                notes=(note + (" | " if note else "") + reply_note),
+            )
 
-        if should_alert_human_reply(inbound_bodies):
+        # No alertar opt-outs / descartados (Prioridad solo muestra responded)
+        if status_now != "discarded" and kind != "stop" and should_alert_human_reply(
+            inbound_bodies
+        ):
             try:
                 result = notify_owner_human_reply(
                     place_name=str(lead.get("place_name") or place_id or "Lead"),

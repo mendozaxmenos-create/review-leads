@@ -157,8 +157,14 @@ def campaign_dashboard_stats() -> dict:
     store.init()
     send_stats = store.campaign_send_stats(CAMPAIGN_ID)
     sent_ids = store.campaign_sent_place_ids(CAMPAIGN_ID, live_only=True)
+    all_sent = store.all_live_sent_place_ids()
     by_status = store.count_leads_by_campaign_status(CAMPAIGN_TAG)
     crm_tagged = sum(by_status.values())
+    crm_ids = {
+        r["place_id"]
+        for r in store.list_leads_by_campaign_tag(CAMPAIGN_TAG, limit=5000)
+        if r.get("place_id")
+    }
 
     try:
         csv_rows = load_ready_csv(csv_path_default())
@@ -167,8 +173,13 @@ def campaign_dashboard_stats() -> dict:
         csv_rows = []
         csv_ids = set()
 
-    universe = len(csv_ids) if csv_ids else crm_tagged
-    pending = max(0, len(csv_ids - sent_ids)) if csv_ids else by_status.get("new", 0)
+    # Universo = todo el CRM de la campaña (todas las bases), no solo el CSV de Mendoza
+    universe = len(crm_ids) if crm_ids else (len(csv_ids) if csv_ids else crm_tagged)
+    pending_ids = crm_ids - all_sent if crm_ids else (csv_ids - all_sent if csv_ids else set())
+    pending = len(pending_ids)
+    if not crm_ids and not csv_ids:
+        pending = by_status.get("new", 0)
+
     responded = by_status.get("responded", 0)
     contacted = by_status.get("contacted", 0)
     follow_up = by_status.get("follow_up", 0)
@@ -240,7 +251,7 @@ def list_kpi_leads(kpi: str, *, limit: int = 500, zone: str | None = None) -> di
         sent_ids = set(store.sent_place_ids_for_zone(CAMPAIGN_ID, zone_filter, live_only=True))
     crm_by_place = {
         r["place_id"]: r
-        for r in store.list_leads_by_campaign_tag(CAMPAIGN_TAG, limit=2000)
+        for r in store.list_leads_by_campaign_tag(CAMPAIGN_TAG, limit=5000)
         if r.get("place_id")
     }
 
@@ -352,18 +363,13 @@ def list_kpi_leads(kpi: str, *, limit: int = 500, zone: str | None = None) -> di
 
     leads: list[dict] = []
     if key == "base":
-        place_ids = list(csv_by_place.keys()) if csv_by_place else list(crm_by_place.keys())
+        # Todas las bases del CRM (no solo CSV Mendoza)
+        place_ids = list(crm_by_place.keys()) if crm_by_place else list(csv_by_place.keys())
         leads = [_attach_thread(_row_out(pid)) for pid in place_ids[:limit]]
     elif key == "pending":
         global_sent = store.all_live_sent_place_ids()
-        if csv_by_place:
-            pending_ids = [pid for pid in csv_by_place if pid not in global_sent]
-        else:
-            pending_ids = [
-                pid
-                for pid, r in crm_by_place.items()
-                if r.get("status") == "new" and pid not in global_sent
-            ]
+        source_ids = list(crm_by_place.keys()) if crm_by_place else list(csv_by_place.keys())
+        pending_ids = [pid for pid in source_ids if pid not in global_sent]
         leads = [_attach_thread(_row_out(pid)) for pid in pending_ids[:limit]]
     elif key == "sent":
         leads = [_attach_thread(_row_out(pid)) for pid in list(sent_ids)[:limit]]

@@ -15,9 +15,13 @@ logger = logging.getLogger(__name__)
 
 def should_alert_human_reply(inbound_bodies_oldest_first: list[str | None]) -> bool:
     """True solo al pasar a needs_you (evita spam en cada msg humano siguiente)."""
-    from app.services.reply_classify import classify_inbound_thread
+    from app.services.reply_classify import classify_inbound_body, classify_inbound_thread
 
     if not inbound_bodies_oldest_first:
+        return False
+    # Opt-out: no avisar aunque después digan «gracias» u otro texto corto
+    kinds = [classify_inbound_body(b) for b in inbound_bodies_oldest_first]
+    if "stop" in kinds:
         return False
     now = classify_inbound_thread(inbound_bodies_oldest_first)
     if not now.get("needs_you"):

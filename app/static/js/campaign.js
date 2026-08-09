@@ -48,7 +48,7 @@ Pedí fechas, elegí cabaña y simulá la seña. Es exactamente la experiencia q
 
 Valor: $19.000/mes. Lo dejamos funcionando con tus precios, reglas y check-in.
 
-Si te cierra, respondeme y lo armamos para {{nombre}}.`,
+Si te gustó la demo o te quedó alguna duda de cómo quedaría en {{nombre}}, escribime y lo vemos con calma.`,
   },
   {
     id: "no",
@@ -129,7 +129,7 @@ const KPI_CARDS = [
   {
     key: "base",
     label: "En base",
-    tip: "Leads del CSV limpio",
+    tip: "Todos los leads del CRM (todas las bases)",
     value: (d) => d.universe,
   },
   {
