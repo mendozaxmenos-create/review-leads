@@ -207,7 +207,7 @@ Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin t
 | Flujo | Fechas → personas → cabañas → nombre → seña (transferencia / Mercado Pago simulado) |
 | API | `POST /api/demo/session`, `/chat`, `/simulate-mp-payment`, `/approve-transfer`, `/reject-transfer` |
 | Share | `GET /api/demo/share-link` → siempre URL estable de Render (ignora túneles/localhost en `DEMO_PUBLIC_URL`) |
-| Bot | `app/services/demo_booking_bot.py` (máquina de estados + OpenAI opcional) |
+| Bot | `app/services/demo_booking_bot.py` (máquina de estados + OpenAI opcional; **rechaza off-topic / jailbreak**) |
 | Sesión | En memoria; si el server recarga, reiniciá el chat |
 | Rate limit | ~20 sesiones nuevas / IP / hora |
 
@@ -549,6 +549,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Demo bot: anti prompt-injection / off-topic (no responde mates, historia, jailbreaks; redirige a la reserva) |
 | Ago 2026 | Pitch/demo: `DEMO_PUBLIC_URL` default Render; share-link ignora túneles; docs ops locales vs demo prod |
 | Ago 2026 | Avisos WSP Prioridad (`owner_alerts` + plantilla Utility); no alertar post-STOP; KPI En base = CRM multi-base; pitch cierre empático |
 | Ago 2026 | Base Córdoba (Punilla+Calamuchita): zonas, sweep/ETL, sync multi-base sin pisar Mendoza |
