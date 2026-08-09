@@ -47,11 +47,16 @@ def _rate_limit_session(request: Request) -> None:
     _sessions_by_ip[ip].append(now)
 
 
+_PROD_DEMO_ORIGIN = "https://review-leads.onrender.com"
+_TUNNEL_HINTS = ("trycloudflare.com", "ngrok-free.app", "ngrok.io", "loca.lt")
+
+
 def public_demo_share_url() -> str | None:
-    """URL para pegar en WhatsApp (origen público, sin token)."""
+    """URL para pegar en WhatsApp (origen público estable). Túneles → fallback Render."""
     base = (settings.demo_public_url or "").strip().rstrip("/")
-    if not base:
-        return None
+    low = base.lower()
+    if not base or any(h in low for h in _TUNNEL_HINTS) or "127.0.0.1" in low or "localhost" in low:
+        base = _PROD_DEMO_ORIGIN
     return f"{base}/demo"
 
 
