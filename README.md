@@ -63,7 +63,11 @@ Editá `.env` (ver `.env.example`):
 | `TWILIO_TEMPLATE_SID` | Content SID plantilla marketing aprobada (`HX…`) |
 | `TWILIO_SEND_ENABLED` | `true` = envío live; `false` = dry-run |
 | `TWILIO_SEND_DELAY_SECONDS` | Pausa entre mensajes (default `3`) |
-| `DEMO_PUBLIC_URL` | Origen público sin path, ej. `https://review-leads.onrender.com` (pitch / share-link) |
+| `DEMO_PUBLIC_URL` | Origen del pitch/demo. Default/recomendado: `https://review-leads.onrender.com` (sin `/demo`). **No** uses túnel trycloudflare/ngrok acá |
+| `ALERT_WHATSAPP_TO` | Tu celular para avisos de Prioridad |
+| `ALERT_WHATSAPP_TEMPLATE_SID` | Content SID plantilla Utility de avisos (`HX…`) |
+| `ALERT_ON_HUMAN_REPLY` | `true`/`false` — avisos al entrar a Prioridad |
+| `ALERT_DASHBOARD_URL` | Link en el aviso (local: `http://127.0.0.1:8000/campaign`) |
 | `DASHBOARD_ACCESS_TOKEN` | Si está seteado, protege `/campaign` y `/admin` (`?k=` o header `X-Dashboard-Token`) |
 | `DEMO_ACCESS_TOKEN` | Legacy / ignorado — la demo es pública |
 
@@ -82,7 +86,7 @@ Editá `.env` (ver `.env.example`):
 | http://127.0.0.1:8000/docs | API interactiva (Swagger) |
 | http://127.0.0.1:8000/health | Health check |
 
-Túnel local opcional (PC encendida): `scripts\run_demo_tunnel.bat` → `tools\cloudflared.exe` → URL `*.trycloudflare.com`.
+Túnel local (`scripts\run_demo_tunnel.bat` / cloudflared): **solo** para que Twilio pegue el webhook inbound a tu PC. **No** lo pongas en `DEMO_PUBLIC_URL` ni en el pitch — los leads deben abrir siempre https://review-leads.onrender.com/demo.
 
 ## Usar la interfaz
 
@@ -202,14 +206,19 @@ Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin t
 | UI | Chat huésped + chips/calendario + panel CRM dueño (simulado) |
 | Flujo | Fechas → personas → cabañas → nombre → seña (transferencia / Mercado Pago simulado) |
 | API | `POST /api/demo/session`, `/chat`, `/simulate-mp-payment`, `/approve-transfer`, `/reject-transfer` |
-| Share | `GET /api/demo/share-link` → arma URL si hay `DEMO_PUBLIC_URL` |
+| Share | `GET /api/demo/share-link` → siempre URL estable de Render (ignora túneles/localhost en `DEMO_PUBLIC_URL`) |
 | Bot | `app/services/demo_booking_bot.py` (máquina de estados + OpenAI opcional) |
 | Sesión | En memoria; si el server recarga, reiniciá el chat |
 | Rate limit | ~20 sesiones nuevas / IP / hora |
 
-**Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”. Incluye `DEMO_PUBLIC_URL` (Render o túnel) y precio **$19.000/mes**. El nombre del complejo se completa con **Usar nombre** / Abrir WhatsApp.
+**Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”.
 
-Nunca pegues `http://127.0.0.1` en el pitch: el lead no puede abrirlo.
+- Link demo: **https://review-leads.onrender.com/demo** (fijo/estable; no trycloudflare)
+- Precio: **$19.000/mes**
+- Nombre del complejo: **Usar nombre** / Abrir WhatsApp (obligatorio antes de Copiar)
+- Cierre: “si te gustó la demo… lo vemos con calma”
+
+Nunca pegues `http://127.0.0.1` ni un túnel en el pitch: el lead no puede abrirlo (o el link muere al apagar la PC).
 
 #### Pipeline de datos
 
@@ -526,10 +535,11 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Deploy Render free + UptimeRobot keep-alive
 - [x] Demo `/demo` pública; dashboards con `DASHBOARD_ACCESS_TOKEN`
 - [x] Mirror público `mendozaxmenos-create/review-leads` para deploy (GitHub flaggeado)
-- [x] Pitch “más info” con link Render / túnel + nombre obligatorio al copiar
+- [x] Pitch “más info” con link **Render** estable + nombre obligatorio al copiar
 - [x] Base Córdoba Punilla+Calamuchita (misma campaña, `base=Córdoba`)
 - [x] Avisos WhatsApp al dueño (plantilla Utility) al entrar a Prioridad
 - [x] KPI «En base» = todo el CRM multi-base
+- [x] `share-link` / pitch rechazan túneles (trycloudflare, ngrok, localhost) → Render
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
 - [ ] Email desde web del negocio (Google no expone email)
@@ -539,6 +549,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Pitch/demo: `DEMO_PUBLIC_URL` default Render; share-link ignora túneles; docs ops locales vs demo prod |
 | Ago 2026 | Avisos WSP Prioridad (`owner_alerts` + plantilla Utility); no alertar post-STOP; KPI En base = CRM multi-base; pitch cierre empático |
 | Ago 2026 | Base Córdoba (Punilla+Calamuchita): zonas, sweep/ETL, sync multi-base sin pisar Mendoza |
 | Ago 2026 | Render live, demo pública, dashboards con token, mirror deploy, UptimeRobot, pitch más-info |

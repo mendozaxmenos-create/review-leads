@@ -199,8 +199,10 @@
         <h2>3. Respuestas rápidas (tu WhatsApp)</h2>
         <p class="map-hint">
           Respuesta cuando el lead pide más info: copiá, pegá en tu WhatsApp personal.
-          Incluye el link público de la demo (<code>https://review-leads.onrender.com/demo</code>).
-          Con <code>DEMO_PUBLIC_URL</code> en el server, el campo URL se completa solo.
+          Incluye el link público estable de la demo:
+          <code>https://review-leads.onrender.com/demo</code>
+          (no uses túnel trycloudflare en el pitch).
+          El campo URL se completa solo desde <code>/api/demo/share-link</code>.
         </p>
         <div class="actions-row" style="margin-bottom: 1rem">
           <label>
@@ -212,7 +214,7 @@
             <input
               type="url"
               id="reply-demo-url"
-              placeholder="https://…/demo"
+              placeholder="https://review-leads.onrender.com/demo"
               style="min-width: 18rem"
             />
           </label>
@@ -253,6 +255,6 @@
       <p id="loading-text">Procesando…</p>
     </div>
 
-    <script src="/static/js/campaign.js?v=26"></script>
+    <script src="/static/js/campaign.js?v=27"></script>
   </body>
 </html>
