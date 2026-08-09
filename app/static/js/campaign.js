@@ -151,12 +151,6 @@ const KPI_CARDS = [
     value: (d) => d.responded_human ?? "—",
   },
   {
-    key: "responded_auto",
-    label: "Solo auto-reply",
-    tip: "Bot contestó; si retoma un humano, sube a Prioridad",
-    value: (d) => d.responded_auto ?? "—",
-  },
-  {
     key: "follow_up",
     label: "En seguimiento",
     tip: "Ya les contestaste desde tu WhatsApp",
@@ -238,13 +232,44 @@ function fillReply(template) {
 async function copyText(text, btn) {
   try {
     await navigator.clipboard.writeText(text);
-    const prev = btn.textContent;
-    btn.textContent = "Copiado";
-    setTimeout(() => {
-      btn.textContent = prev;
-    }, 1400);
+    if (btn) {
+      const prev = btn.textContent;
+      btn.textContent = "Copiado";
+      setTimeout(() => {
+        btn.textContent = prev;
+      }, 1400);
+    }
+    return true;
   } catch {
     showError("No se pudo copiar al portapapeles");
+    return false;
+  }
+}
+
+/** Pitch con nombre → clipboard → abrir WhatsApp del lead (un solo gesto). */
+async function handoffPitchToWhatsApp({ name, waUrl, btn }) {
+  const n = (name || "").trim();
+  if (!n) {
+    showError("Falta el nombre del complejo.");
+    return;
+  }
+  setReplyPlaceName(n);
+  const pitch = QUICK_REPLIES.find((x) => x.id === "pitch");
+  if (!pitch) return;
+  const text = fillReply(pitch.body);
+  const ok = await copyText(text, null);
+  if (!ok) return;
+  if (btn) {
+    const prev = btn.textContent;
+    btn.textContent = "Copiado · abriendo…";
+    setTimeout(() => {
+      btn.textContent = prev;
+    }, 1800);
+  }
+  if (waUrl) {
+    window.open(waUrl, "_blank", "noopener");
+  } else {
+    showError("Pitch copiado, pero este lead no tiene teléfono para WhatsApp.");
   }
 }
 
@@ -278,8 +303,107 @@ function renderQuickReplies() {
   });
 }
 
+function formatTwilioMoney(amount, currency) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "—";
+  const cur = currency || "USD";
+  try {
+    return new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: cur,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${cur} ${n.toFixed(2)}`;
+  }
+}
+
+function formatTwilioBalance(d) {
+  const b = d?.twilio_balance;
+  if (!b) return "…";
+  if (!b.ok || b.balance == null) return "—";
+  return formatTwilioMoney(b.balance, b.currency);
+}
+
+function formatTwilioUsage(d) {
+  const u = d?.twilio_usage;
+  if (!u) return "…";
+  if (!u.ok || u.this_month == null) return "—";
+  return formatTwilioMoney(u.this_month, u.currency);
+}
+
+function twilioBillingCardsHtml(d) {
+  const bal = d.twilio_balance;
+  const loadingBal = !bal;
+  const balTip = loadingBal
+    ? "Consultando saldo Twilio…"
+    : bal.ok
+      ? "Saldo de cuenta Twilio (puede demorar unos minutos en actualizarse tras envíos)"
+      : bal.error
+        ? `No se pudo leer el saldo: ${bal.error}`
+        : "Saldo Twilio no disponible";
+  const balClass = loadingBal
+    ? " admin-stat-card--muted"
+    : bal.ok && Number(bal.balance) < 5
+      ? " admin-stat-card--warn"
+      : bal.ok
+        ? " admin-stat-card--info"
+        : " admin-stat-card--muted";
+  const balHtml = `<div class="admin-stat-card admin-stat-card--static${balClass}" data-twilio-card="balance" title="${escapeHtml(balTip)}" role="status">
+      <div class="admin-stat-label">Saldo Twilio</div>
+      <div class="admin-stat-value">${escapeHtml(formatTwilioBalance(d))}</div>
+    </div>`;
+
+  const usage = d.twilio_usage;
+  const loadingUsage = !usage;
+  const waCount =
+    usage?.whatsapp_marketing_count != null ? ` · ${usage.whatsapp_marketing_count} WA marketing` : "";
+  const allTime =
+    usage?.ok && usage.all_time != null
+      ? ` All-time: ${formatTwilioMoney(usage.all_time, usage.currency)}.`
+      : "";
+  const usageTip = loadingUsage
+    ? "Consultando uso Twilio…"
+    : usage.ok
+      ? `Total cobrado por Twilio este mes (Usage totalprice).${allTime}${waCount}`
+      : usage.error
+        ? `No se pudo leer el uso: ${usage.error}`
+        : "Uso Twilio no disponible";
+  const usageHtml = `<div class="admin-stat-card admin-stat-card--static admin-stat-card--info" data-twilio-card="usage" title="${escapeHtml(usageTip)}" role="status">
+      <div class="admin-stat-label">Cargado Twilio (mes)</div>
+      <div class="admin-stat-value">${escapeHtml(formatTwilioUsage(d))}</div>
+    </div>`;
+
+  return balHtml + usageHtml;
+}
+
+function renderTwilioBilling(billing) {
+  if (!els.stats) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = twilioBillingCardsHtml(billing || {});
+  // Snapshot: HTMLCollection es live y se rompe al mover el primer nodo
+  const cards = Array.from(wrap.children);
+  ["balance", "usage"].forEach((key, i) => {
+    const fresh = cards[i];
+    const old = els.stats.querySelector(`[data-twilio-card="${key}"]`);
+    if (old && fresh) old.replaceWith(fresh);
+  });
+}
+
+async function loadTwilioBilling() {
+  try {
+    const billing = await api("/api/campaigns/mendoza-cabanas/twilio-billing");
+    renderTwilioBilling(billing);
+  } catch (err) {
+    renderTwilioBilling({
+      twilio_balance: { ok: false, balance: null, currency: null, error: err.message || String(err) },
+      twilio_usage: { ok: false, this_month: null, all_time: null, currency: null, error: err.message || String(err) },
+    });
+  }
+}
+
 function renderStats(d) {
-  els.stats.innerHTML = KPI_CARDS.map((card) => {
+  const kpiHtml = KPI_CARDS.map((card) => {
     const val = card.value(d);
     const active = activeKpi === card.key ? " is-active" : "";
     return `<button type="button" class="admin-stat-card${active}" data-kpi="${escapeHtml(card.key)}" title="${escapeHtml(card.tip)}">
@@ -287,6 +411,9 @@ function renderStats(d) {
       <div class="admin-stat-value">${val}</div>
     </button>`;
   }).join("");
+
+  // Placeholders; billing real llega en loadTwilioBilling (no bloquea el refresh)
+  els.stats.innerHTML = kpiHtml + twilioBillingCardsHtml({});
 
   els.stats.querySelectorAll("[data-kpi]").forEach((btn) => {
     btn.addEventListener("click", () => selectKpi(btn.dataset.kpi));
@@ -471,7 +598,7 @@ function renderKpiView(data) {
     els.kpiViewHint.textContent =
       "Misma vista que Prioridad. Tocá «Cerrar · volver a KPIs» o el botón flotante ↑.";
   }
-  const showHandoff = activeKpi === "responded_human" || activeKpi === "responded_auto";
+  const showHandoff = activeKpi === "responded_human";
   renderLeadActionRows(rows, els.kpiViewBody, {
     emptyText: "Sin contactos en este KPI",
     showHandoff,
@@ -525,9 +652,12 @@ function bindLeadRowActions(tbody) {
     });
   });
   tbody.querySelectorAll("[data-use-name]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      setReplyPlaceName(btn.dataset.useName || "");
-      els.replyPlaceName?.scrollIntoView({ behavior: "smooth", block: "center" });
+    btn.addEventListener("click", async () => {
+      await handoffPitchToWhatsApp({
+        name: btn.dataset.useName || "",
+        waUrl: btn.dataset.wa || "",
+        btn,
+      });
     });
   });
   tbody.querySelectorAll("a.btn-whatsapp-primary").forEach((a) => {
@@ -567,18 +697,16 @@ function formatReplyCell(r) {
     threadHtml = `<ol class="reply-thread">${replies
       .map((m, i) => {
         const body = String(m.body || "").trim();
-        const short = body.length > 160 ? `${body.slice(0, 160)}…` : body;
         const label = m.kind_label || m.kind || "";
         return `<li>
             <span class="reply-thread-idx">Msg ${i + 1} · ${escapeHtml(label)}</span>
-            <div class="reply-snippet">${escapeHtml(short || "—")}</div>
+            <div class="reply-snippet">${escapeHtml(body || "—")}</div>
           </li>`;
       })
       .join("")}</ol>`;
   } else if (replies.length === 1 || r.last_reply) {
     const snippet = String((replies[0] && replies[0].body) || r.last_reply || "").trim();
-    const short = snippet.length > 160 ? `${snippet.slice(0, 160)}…` : snippet;
-    threadHtml = `<div class="reply-snippet">${escapeHtml(short || "—")}</div>`;
+    threadHtml = `<div class="reply-snippet">${escapeHtml(snippet || "—")}</div>`;
   } else {
     threadHtml = `<div class="reply-snippet">${escapeHtml(r.notes || "—")}</div>`;
   }
@@ -630,9 +758,9 @@ function renderLeadActionRows(rows, tbody, { emptyText, showHandoff }) {
         <td><span class="badge ${replyBadgeClass(kind)}" title="${escapeHtml(label)}">${escapeHtml(label)}</span></td>
         <td>${formatReplyCell(r)}</td>
         <td class="actions-row">
-          ${wa ? `<a class="btn btn-sm btn-whatsapp-primary" href="${wa}" target="_blank" rel="noopener">Abrir en mi WhatsApp</a>` : ""}
+          ${wa ? `<a class="btn btn-sm btn-whatsapp-primary" href="${wa}" target="_blank" rel="noopener">Solo abrir WhatsApp</a>` : ""}
           ${mail ? `<a class="btn btn-sm btn-secondary" href="${mail}">Email</a>` : ""}
-          <button type="button" class="btn btn-sm btn-secondary" data-use-name="${escapeHtml(r.place_name || "")}">Usar nombre</button>
+          <button type="button" class="btn btn-sm btn-primary" data-use-name="${escapeHtml(r.place_name || "")}" data-wa="${escapeHtml(wa || "")}" title="Copia el pitch con el nombre del complejo y abre tu WhatsApp">Pitch + WhatsApp</button>
           ${handoffBtn}
           <button type="button" class="btn btn-sm btn-secondary" data-discard="${escapeHtml(r.place_id)}" data-discard-reason="${looksOptOut ? "STOP" : "no interesado"}">${looksOptOut ? "Descartar STOP" : "No interesado"}</button>
         </td>
@@ -759,6 +887,8 @@ async function refresh() {
     else if (els.followupBody) {
       els.followupBody.innerHTML = `<tr><td colspan="5" class="admin-empty">Seguimiento no disponible (reiniciá el server)</td></tr>`;
     }
+    // Billing Twilio aparte: no bloquea KPIs / inbox
+    loadTwilioBilling();
     if (activeKpi) {
       try {
         const data = await api(`/api/campaigns/mendoza-cabanas/kpi/${encodeURIComponent(activeKpi)}?limit=500`);

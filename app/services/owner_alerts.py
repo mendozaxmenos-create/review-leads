@@ -55,7 +55,7 @@ def build_alert_text(
     body: str,
     thread_label: str,
 ) -> str:
-    snippet = (body or "").strip().replace("\n", " ")[:180]
+    snippet = (body or "").strip().replace("\n", " ")[:900]
     dash = (settings.alert_dashboard_url or "http://127.0.0.1:8000/campaign").rstrip("/")
     return (
         f"SofIA · Prioridad (humano)\n"
@@ -76,7 +76,8 @@ def _alert_headline(place_name: str, zone: str, base: str) -> str:
 
 
 def _alert_snippet(body: str) -> str:
-    return (body or "").strip().replace("\n", " ")[:60] or "(sin texto)"
+    # Content/WhatsApp vars ~1024; dejamos margen para no romper la plantilla
+    return (body or "").strip().replace("\n", " ")[:900] or "(sin texto)"
 
 
 def _wait_delivery(client, sid: str, *, attempts: int = 6, delay: float = 1.0) -> tuple[str, int | None, str | None]:

@@ -345,10 +345,19 @@ async def upload_mendoza_csv(
 
 
 @router.get("/mendoza-cabanas/dashboard")
-async def mendoza_wa_dashboard() -> dict:
+def mendoza_wa_dashboard() -> dict:
+    """Sync def → threadpool: no bloquea el event loop ni el resto del refresh."""
     from app.services.mendoza_campaign import campaign_dashboard_stats
 
     return campaign_dashboard_stats()
+
+
+@router.get("/mendoza-cabanas/twilio-billing")
+def mendoza_twilio_billing() -> dict:
+    """Saldo y uso cobrado (carga aparte para no colgar el dashboard)."""
+    from app.services.mendoza_campaign import twilio_billing_snapshot
+
+    return twilio_billing_snapshot()
 
 
 @router.get("/mendoza-cabanas/bases/{base_name}/sent-zones")
@@ -382,7 +391,7 @@ async def mendoza_wa_kpi_leads(
 
 
 @router.get("/mendoza-cabanas/sends")
-async def mendoza_wa_sends(limit: int = 100, live_only: bool = False) -> list[dict]:
+def mendoza_wa_sends(limit: int = 100, live_only: bool = False) -> list[dict]:
     from app.services.mendoza_campaign import CAMPAIGN_ID
 
     store = get_store()
@@ -433,17 +442,17 @@ async def send_mendoza_wa(body: dict | None = None) -> dict:
 
 
 @router.get("/mendoza-cabanas/responded")
-async def list_responded(limit: int = 100) -> list[dict]:
-    return await _list_campaign_status_leads("responded", limit)
+def list_responded(limit: int = 100) -> list[dict]:
+    return _list_campaign_status_leads("responded", limit)
 
 
 @router.get("/mendoza-cabanas/follow-up")
-async def list_follow_up(limit: int = 100) -> list[dict]:
+def list_follow_up(limit: int = 100) -> list[dict]:
     """Leads que ya contestaste vos (seguimiento fuera de Twilio)."""
-    return await _list_campaign_status_leads("follow_up", limit)
+    return _list_campaign_status_leads("follow_up", limit)
 
 
-async def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
+def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
     from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
     from app.services.reply_classify import classify_inbound_body, classify_inbound_thread
 

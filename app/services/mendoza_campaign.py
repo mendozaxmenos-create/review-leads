@@ -15,6 +15,8 @@ from app.services.campaign_send import DEFAULT_READY_CSV, LEGACY_READY_CSV, load
 from app.services.twilio_whatsapp import (
     TwilioWhatsAppService,
     extract_zone_from_reason,
+    fetch_twilio_balance,
+    fetch_twilio_usage,
     normalize_whatsapp_number,
     resolve_template_region,
 )
@@ -225,6 +227,14 @@ def campaign_dashboard_stats() -> dict:
         "webhook_inbound": "/api/twilio/whatsapp/inbound",
         "bases": store.list_campaign_bases(CAMPAIGN_TAG),
         "sent_zones": store.list_sent_zones(CAMPAIGN_ID, live_only=True),
+    }
+
+
+def twilio_billing_snapshot() -> dict:
+    """Saldo + uso cobrado (fuera del path crítico del dashboard)."""
+    return {
+        "twilio_balance": fetch_twilio_balance(timeout=4.0),
+        "twilio_usage": fetch_twilio_usage(timeout=6.0),
     }
 
 

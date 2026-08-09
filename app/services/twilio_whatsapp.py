@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from app.config import settings
 
@@ -58,6 +59,168 @@ def resolve_template_region(lead: dict | None, *, fallback: str = "tu zona") -> 
     if base:
         return base[:60]
     return (fallback or "tu zona")[:60]
+
+
+def _twilio_auth() -> tuple[str, str] | None:
+    sid = settings.twilio_account_sid.strip()
+    token = settings.twilio_auth_token.strip()
+    if not sid or not token:
+        return None
+    return sid, token
+
+
+def fetch_twilio_balance(*, timeout: float = 5.0) -> dict[str, Any]:
+    """Saldo de cuenta Twilio (GET Balance). Soft-fail si faltan creds o la API falla."""
+    auth = _twilio_auth()
+    if not auth:
+        return {
+            "ok": False,
+            "balance": None,
+            "currency": None,
+            "error": "Faltan TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN",
+        }
+    sid, token = auth
+    try:
+        import httpx
+    except ImportError:
+        return {
+            "ok": False,
+            "balance": None,
+            "currency": None,
+            "error": "httpx no instalado",
+        }
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Balance.json"
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url, auth=(sid, token))
+        if resp.status_code != 200:
+            detail = (resp.text or "")[:160]
+            return {
+                "ok": False,
+                "balance": None,
+                "currency": None,
+                "error": f"HTTP {resp.status_code}: {detail}",
+            }
+        data = resp.json()
+        raw = data.get("balance")
+        try:
+            amount = float(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            amount = None
+        return {
+            "ok": True,
+            "balance": amount,
+            "currency": (data.get("currency") or "USD").strip().upper() or "USD",
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "balance": None,
+            "currency": None,
+            "error": str(exc)[:200],
+        }
+
+
+def _parse_usage_price(payload: dict[str, Any]) -> tuple[float | None, str]:
+    rows = payload.get("usage_records") or []
+    if not rows:
+        return 0.0, "USD"
+    row = rows[0]
+    raw = row.get("price")
+    try:
+        amount = float(raw) if raw is not None else 0.0
+    except (TypeError, ValueError):
+        amount = None
+    unit = (row.get("price_unit") or "usd").strip().upper() or "USD"
+    return amount, unit
+
+
+def fetch_twilio_usage(*, timeout: float = 6.0) -> dict[str, Any]:
+    """Uso cobrado (Usage Records totalprice): mes actual + all-time. Soft-fail."""
+    auth = _twilio_auth()
+    if not auth:
+        return {
+            "ok": False,
+            "this_month": None,
+            "all_time": None,
+            "currency": None,
+            "whatsapp_marketing_count": None,
+            "error": "Faltan TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN",
+        }
+    sid, token = auth
+    try:
+        import httpx
+    except ImportError:
+        return {
+            "ok": False,
+            "this_month": None,
+            "all_time": None,
+            "currency": None,
+            "whatsapp_marketing_count": None,
+            "error": "httpx no instalado",
+        }
+    base = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Usage/Records"
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _get(path: str, category: str):
+            with httpx.Client(timeout=timeout) as client:
+                return client.get(
+                    f"{base}/{path}",
+                    auth=(sid, token),
+                    params={"Category": category},
+                )
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            fut_month = pool.submit(_get, "ThisMonth.json", "totalprice")
+            fut_all = pool.submit(_get, "AllTime.json", "totalprice")
+            fut_wa = pool.submit(
+                _get, "ThisMonth.json", "channels-whatsapp-template-marketing"
+            )
+            month = fut_month.result()
+            all_time = fut_all.result()
+            wa = fut_wa.result()
+        if month.status_code != 200:
+            detail = (month.text or "")[:160]
+            return {
+                "ok": False,
+                "this_month": None,
+                "all_time": None,
+                "currency": None,
+                "whatsapp_marketing_count": None,
+                "error": f"HTTP {month.status_code}: {detail}",
+            }
+        this_month, currency = _parse_usage_price(month.json())
+        all_amt: float | None = None
+        if all_time.status_code == 200:
+            all_amt, cur2 = _parse_usage_price(all_time.json())
+            currency = currency or cur2
+        wa_count: int | None = None
+        if wa.status_code == 200:
+            rows = (wa.json() or {}).get("usage_records") or []
+            if rows:
+                try:
+                    wa_count = int(float(rows[0].get("count") or 0))
+                except (TypeError, ValueError):
+                    wa_count = None
+        return {
+            "ok": True,
+            "this_month": this_month,
+            "all_time": all_amt,
+            "currency": currency or "USD",
+            "whatsapp_marketing_count": wa_count,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "this_month": None,
+            "all_time": None,
+            "currency": None,
+            "whatsapp_marketing_count": None,
+            "error": str(exc)[:200],
+        }
 
 
 class TwilioWhatsAppService:

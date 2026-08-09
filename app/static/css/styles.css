@@ -640,13 +640,16 @@ input[type="range"] {
 }
 
 .reply-cell {
-  max-width: 28rem;
+  max-width: 36rem;
 }
 
 .reply-snippet {
   font-size: 0.88rem;
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.4;
+  max-height: 18rem;
+  overflow-y: auto;
 }
 
 .reply-hint {
@@ -1203,6 +1206,27 @@ tr.row-auto-reply td {
   box-shadow: 0 0 0 1px rgba(45, 212, 160, 0.25);
 }
 
+.admin-stat-card--static {
+  cursor: default;
+}
+
+.admin-stat-card--static:hover {
+  transform: none;
+  border-color: var(--border);
+}
+
+.admin-stat-card--info .admin-stat-value {
+  color: #38bdf8;
+}
+
+.admin-stat-card--warn .admin-stat-value {
+  color: #f59e0b;
+}
+
+.admin-stat-card--muted .admin-stat-value {
+  color: #94a3b8;
+}
+
 .fab-home {
   position: fixed;
   right: 1.25rem;
@@ -1520,7 +1544,7 @@ details#advanced-logs summary {
   }
 }
 
-/* CampaÃ±a: respuestas rÃ¡pidas */
+/* CampaÃÂ±a: respuestas rÃÂ¡pidas */
 .quick-replies {
   display: grid;
   gap: 0.85rem;
@@ -1558,7 +1582,7 @@ details#advanced-logs summary {
   opacity: 0.92;
 }
 
-/* ï¿½ï¿½ï¿½ Demo booking bot ï¿½ï¿½ï¿½ */
+/* Ã¯Â¿Â½Ã¯Â¿Â½Ã¯Â¿Â½ Demo booking bot Ã¯Â¿Â½Ã¯Â¿Â½Ã¯Â¿Â½ */
 .demo-body {
   min-height: 100vh;
 }
@@ -1714,12 +1738,12 @@ details#advanced-logs summary {
 }
 
 .demo-dates-panel > summary::before {
-  content: "â¸ ";
+  content: "Ã¢ÂÂ¸ ";
   color: var(--accent);
 }
 
 .demo-dates-panel[open] > summary::before {
-  content: "â¾ ";
+  content: "Ã¢ÂÂ¾ ";
 }
 
 .demo-dates {

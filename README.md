@@ -246,12 +246,13 @@ Nunca pegues `http://127.0.0.1` ni un túnel en el pitch: el lead no puede abrir
 #### Twilio (producción)
 
 1. Sender WhatsApp **+54** ONLINE (no Sandbox US para blast)
-2. Plantilla **MARKETING** de primer contacto: `{{1}}`=nombre, `{{2}}`=zona  
+2. Plantilla **MARKETING** de primer contacto: `{{1}}`=nombre, `{{2}}`=zona (o base)  
    Crear/enviar a Meta: `python scripts/create_wa_template.py`
 3. Plantilla **UTILITY** de aviso al dueño (Prioridad): `python scripts/create_wa_alert_template.py` → `ALERT_WHATSAPP_TEMPLATE_SID`
 4. `.env`: `TWILIO_WHATSAPP_FROM`, `TWILIO_TEMPLATE_SID`, `TWILIO_SEND_ENABLED=true`, `ALERT_WHATSAPP_TO`, `ALERT_WHATSAPP_TEMPLATE_SID`
 5. Webhook inbound (URL pública): `POST /api/twilio/whatsapp/inbound`  
    Local: túnel (`cloudflared` / ngrok) → misma PC donde corre el CRM/SQLite
+6. El dashboard `/campaign` muestra **Saldo Twilio** y **Cargado Twilio (mes)** vía endpoint aparte (`/twilio-billing`, no bloquea la carga)
 
 #### Envío por lotes
 
@@ -278,9 +279,17 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 #### Handoff (después de que contestan)
 
-1. Dashboard → **Prioridad / Contestaron** → Abrir en mi WhatsApp / Usar nombre  
-2. Sección **Respuestas rápidas** → Copiar pitch “Más info” (incluye `https://review-leads.onrender.com/demo`)  
+1. Dashboard → **Prioridad** → **Pitch + WhatsApp** (copia el pitch con el nombre y abre tu WA)
+2. Alternativa: **Solo abrir WhatsApp** si ya tenés el texto
 3. No responder por Twilio (ahorra costo por mensaje)
+
+#### Lunes · checklist ops (sin sorpresas)
+
+1. Encender PC → uvicorn local + túnel cloudflared al webhook inbound  
+2. `/campaign` → chequear **Saldo Twilio** y **Prioridad** (contestar humanos primero)  
+3. Ola 1 está **agotada** (~1 pendiente). Mandar desde bases **Ola 2** (dropdown)  
+4. Lotes chicos (10–20), pausa entre bases; dry-run 1 antes del live si dudás  
+5. Preflight: `python -m scripts.monday_ready_check`
 
 ### Base Córdoba · cabañas (misma campaña)
 
@@ -304,6 +313,23 @@ Objetivo: más bases de cabañas **sin quemar Twilio** en alojamientos que ya ti
 | Río Negro | Bariloche, Circuito Chico, El Bolsón, Las Grutas |
 
 (+ Mendoza y Córdoba en el mismo registro para CLI unificado.)
+
+**Bases Ola 2** (stock para mandar; no enviar hasta lunes / validar unit economics):
+
+| Base CRM | Zonas |
+|----------|-------|
+| Catamarca | Fiambalá, Belén, Tinogasta |
+| La Rioja | Chilecito, Villa Unión, Nonogasta |
+| Entre Ríos | Colón, Gualeguaychú, Federación |
+| Misiones (interior) | Aristóbulo del Valle, El Soberbio, San Ignacio |
+| Chubut | Esquel, Trevelin, Cholila / Lago Puelo |
+| Santa Cruz | El Calafate, El Chaltén |
+| Tierra del Fuego | Ushuaia, Tolhuin |
+
+```bash
+# Ola 2 completa (Places sí; WhatsApp no)
+.venv\Scripts\python -m scripts.run_cabanas_ola2 --max-places 35
+```
 
 **Filtro booking** ([`app/services/booking_signals.py`](app/services/booking_signals.py)): hard-exclude en ETL si el `website` es OTA/directorio o el HTML tiene motor (Cloudbeds, Little Hotelier, etc.). Instagram/WhatsApp **no** excluyen. Fallo de fetch ≠ exclude.
 
@@ -589,8 +615,9 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Ola 1 multi-provincia (BA interior, San Luis, Salta, Jujuy, Neuquén, Río Negro) + ETL/sync
 - [x] Filtro hard `booking_signals` (OTA/motor) + re-ETL Mendoza/Córdoba
 - [x] Fix match inbound: no atribuir a leads sin teléfono; priorizar `campaign_sends`
-- [ ] **Ola 2:** Chubut, Calafate, TdF, Catamarca, La Rioja, Entre Ríos, Misiones interior
-- [ ] Barrido nacional único (solo si Ola 1 valida unit economics)
+- [x] Dashboard: Saldo + Cargado Twilio; Pitch + WhatsApp; mensajes inbound completos
+- [x] **Ola 2:** zonas + pipeline `run_cabanas_ola2` (Chubut, Calafate/TdF, Catamarca, La Rioja, Entre Ríos, Misiones)
+- [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
 - [ ] A/B plantilla WhatsApp y precio post-filtro
 - [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
@@ -603,6 +630,8 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Ola 2 zonas + `run_cabanas_ola2`; checklist lunes; Pitch+WhatsApp; Saldo/Cargado Twilio async |
+| Ago 2026 | Dashboard: **Saldo Twilio** + **Cargado Twilio (mes)** (Balance + Usage totalprice) |
 | Ago 2026 | Fix match inbound (`find_lead_by_phone_digits`): prioriza envíos live, ignora phone vacío; scripts scan/repair; doc inbox por base |
 | Ago 2026 | Ola 1 AR (6 bases), pipeline `cabanas_sweep`/`etl_cabanas_base`, filtro reservas online, re-ETL Mza/Cba |
 | Ago 2026 | Demo bot: anti prompt-injection / off-topic (no responde mates, historia, jailbreaks; redirige a la reserva) |

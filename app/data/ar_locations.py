@@ -149,6 +149,47 @@ RIO_NEGRO_CABANAS_ZONES: list[CampaignZone] = [
     CampaignZone("rn-las-grutas", "Las Grutas", -40.8028, -65.0778, 12, 12),
 ]
 
+# --- Ola 2 ---
+CATAMARCA_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("cat-fiambala", "Fiambalá", -27.6889, -67.6167, 12, 12),
+    CampaignZone("cat-belen", "Belén", -27.6500, -67.0333, 12, 12),
+    CampaignZone("cat-tinogasta", "Tinogasta", -28.0667, -67.5667, 12, 12),
+]
+
+LA_RIOJA_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("lr-chilecito", "Chilecito", -29.1667, -67.5000, 14, 12),
+    CampaignZone("lr-villa-union", "Villa Unión", -29.3167, -68.2167, 12, 12),
+    CampaignZone("lr-nonogasta", "Nonogasta / costa riojana", -29.3000, -67.5000, 12, 12),
+]
+
+ENTRE_RIOS_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("er-colon", "Colón", -32.2236, -58.1442, 14, 12),
+    CampaignZone("er-gualeguaychu", "Gualeguaychú", -33.0094, -58.5172, 14, 12),
+    CampaignZone("er-federacion", "Federación", -30.9833, -57.9167, 12, 12),
+]
+
+MISIONES_INTERIOR_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("mis-aristobulo", "Aristóbulo del Valle", -27.0967, -54.8967, 12, 12),
+    CampaignZone("mis-el-soberbio", "El Soberbio", -27.2950, -54.1983, 12, 12),
+    CampaignZone("mis-san-ignacio", "San Ignacio", -27.2583, -55.5333, 12, 12),
+]
+
+CHUBUT_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("chu-esquel", "Esquel", -42.9097, -71.3195, 14, 12),
+    CampaignZone("chu-trevelin", "Trevelin", -43.0833, -71.4667, 12, 12),
+    CampaignZone("chu-cholila", "Cholila / Lago Puelo", -42.5167, -71.4667, 12, 12),
+]
+
+SANTA_CRUZ_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("sc-calafate", "El Calafate", -50.3379, -72.2648, 14, 12),
+    CampaignZone("sc-chalten", "El Chaltén", -49.3315, -72.8864, 14, 12),
+]
+
+TIERRA_DEL_FUEGO_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("tdf-ushuaia", "Ushuaia", -54.8019, -68.3030, 14, 12),
+    CampaignZone("tdf-tolhuin", "Tolhuin", -54.5167, -67.2000, 12, 12),
+]
+
 # Registro de bases CRM → zonas (incluye Mendoza/Córdoba para CLI genérico).
 CABANAS_BASES: dict[str, list[CampaignZone]] = {
     "Mendoza": MENDOZA_CABANAS_ZONES,
@@ -159,6 +200,13 @@ CABANAS_BASES: dict[str, list[CampaignZone]] = {
     "Jujuy": JUJUY_CABANAS_ZONES,
     "Neuquén": NEUQUEN_CABANAS_ZONES,
     "Río Negro": RIO_NEGRO_CABANAS_ZONES,
+    "Catamarca": CATAMARCA_CABANAS_ZONES,
+    "La Rioja": LA_RIOJA_CABANAS_ZONES,
+    "Entre Ríos": ENTRE_RIOS_CABANAS_ZONES,
+    "Misiones (interior)": MISIONES_INTERIOR_CABANAS_ZONES,
+    "Chubut": CHUBUT_CABANAS_ZONES,
+    "Santa Cruz": SANTA_CRUZ_CABANAS_ZONES,
+    "Tierra del Fuego": TIERRA_DEL_FUEGO_CABANAS_ZONES,
 }
 
 # Orden de barrido Ola 1 (costo Places / saturación OTA).
@@ -169,6 +217,17 @@ CABANAS_OLA1_ORDER: tuple[str, ...] = (
     "Jujuy",
     "Neuquén",
     "Río Negro",
+)
+
+# Ola 2: interior NOA + Litoral + Patagonia sur (sin envíos hasta validar).
+CABANAS_OLA2_ORDER: tuple[str, ...] = (
+    "Catamarca",
+    "La Rioja",
+    "Entre Ríos",
+    "Misiones (interior)",
+    "Chubut",
+    "Santa Cruz",
+    "Tierra del Fuego",
 )
 
 
@@ -218,8 +277,18 @@ _EXTRA_OLA1_PRESETS = [
     for z in CABANAS_BASES[base]
 ]
 
+_EXTRA_OLA2_PRESETS = [
+    LocationPreset(z.id, f"{base} · {z.label}", z.lat, z.lng, z.zoom, "city")
+    for base in CABANAS_OLA2_ORDER
+    for z in CABANAS_BASES[base]
+]
+
 ALL_PRESETS: list[LocationPreset] = (
-    AR_PROVINCES + MENDOZA_DEPARTMENTS + _EXTRA_CORDOBA_PRESETS + _EXTRA_OLA1_PRESETS
+    AR_PROVINCES
+    + MENDOZA_DEPARTMENTS
+    + _EXTRA_CORDOBA_PRESETS
+    + _EXTRA_OLA1_PRESETS
+    + _EXTRA_OLA2_PRESETS
 )
 
 
