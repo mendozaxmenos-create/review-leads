@@ -167,6 +167,21 @@ Inbound WhatsApp se clasifica en `app/services/reply_classify.py`:
 - Auto-replies tipo hotel (“en un momento respondemos…”) se marcan como auto, no como humano
 - Tras un **STOP**, mensajes tipo «gracias» no reabren Prioridad ni disparan aviso
 
+**Match de teléfono inbound (importante)**
+
+`find_lead_by_phone_digits` (`app/db/store.py`) asocia el WhatsApp entrante al lead:
+
+1. Primero busca en `campaign_sends` (envíos live ok) — fuente más fiable
+2. Luego CRM, **solo** si el lead tiene teléfono real (≥8 dígitos)
+3. Nunca matchea `phone` vacío (bug post-Ola 1: `endswith("")` pegaba inbounds a leads sin teléfono recién importados)
+
+El **nombre en el aviso WhatsApp** sale del lead matcheado. Si no lo encontrás en Prioridad: mirá la **base correcta** del complejo real (el inbox filtra por base). Scripts ops locales:
+
+```bash
+python -m scripts.scan_recent_inbounds          # últimos inbounds + flags NO_PHONE
+python -m scripts.repair_la_ruka_misattribute   # one-shot ejemplo de reatribuir hilo
+```
+
 **Avisos al dueño (KPI Prioridad / humano)**
 
 Cuando un inbound **entra** a «Por contestar (humano)» (primera vez del hilo, no cada mensaje), SofIA te avisa por WhatsApp (plantilla Utility). Servicio: `app/services/owner_alerts.py`.
@@ -573,6 +588,7 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] `share-link` / pitch rechazan túneles (trycloudflare, ngrok, localhost) → Render
 - [x] Ola 1 multi-provincia (BA interior, San Luis, Salta, Jujuy, Neuquén, Río Negro) + ETL/sync
 - [x] Filtro hard `booking_signals` (OTA/motor) + re-ETL Mendoza/Córdoba
+- [x] Fix match inbound: no atribuir a leads sin teléfono; priorizar `campaign_sends`
 - [ ] **Ola 2:** Chubut, Calafate, TdF, Catamarca, La Rioja, Entre Ríos, Misiones interior
 - [ ] Barrido nacional único (solo si Ola 1 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
@@ -587,6 +603,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Fix match inbound (`find_lead_by_phone_digits`): prioriza envíos live, ignora phone vacío; scripts scan/repair; doc inbox por base |
 | Ago 2026 | Ola 1 AR (6 bases), pipeline `cabanas_sweep`/`etl_cabanas_base`, filtro reservas online, re-ETL Mza/Cba |
 | Ago 2026 | Demo bot: anti prompt-injection / off-topic (no responde mates, historia, jailbreaks; redirige a la reserva) |
 | Ago 2026 | Pitch/demo: `DEMO_PUBLIC_URL` default Render; share-link ignora túneles; docs ops locales vs demo prod |

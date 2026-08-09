@@ -754,29 +754,79 @@ class Store:
         return [dict(row) for row in rows]
 
     def find_lead_by_phone_digits(self, digits: str) -> dict[str, Any] | None:
-        """Busca lead cuyo teléfono normalizado termine igual (AR)."""
+        """Busca lead por teléfono (últimos 10 dígitos). Prioriza destinatarios de envío live."""
         if not digits:
             return None
         needle = digits[-10:] if len(digits) >= 10 else digits
+        if len(needle) < 8:
+            return None
+
+        def _phone_match(phone: str | None) -> bool:
+            ph = "".join(ch for ch in str(phone or "") if ch.isdigit())
+            if len(ph) < 8:
+                return False
+            tail = ph[-10:] if len(ph) >= 10 else ph
+            return ph.endswith(needle) or needle.endswith(tail)
+
+        # 1) Destinatarios reales de Twilio (más fiable que CRM sin teléfono)
+        with self._connect() as conn:
+            send_rows = conn.execute(
+                """
+                SELECT place_id, phone FROM campaign_sends
+                WHERE ok = 1 AND dry_run = 0
+                  AND place_id IS NOT NULL AND place_id != ''
+                  AND phone IS NOT NULL AND phone != ''
+                ORDER BY id DESC
+                LIMIT 3000
+                """
+            ).fetchall()
+        for srow in send_rows:
+            if not _phone_match(srow["phone"]):
+                continue
+            place_id = srow["place_id"]
+            with self._connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT id, place_id, status, notes, lead_json, updated_at
+                    FROM saved_leads WHERE place_id = ?
+                    ORDER BY updated_at DESC LIMIT 1
+                    """,
+                    (place_id,),
+                ).fetchone()
+            if row:
+                item = dict(row)
+                item["lead"] = json.loads(item.pop("lead_json"))
+                return item
+
+        # 2) Fallback CRM: solo leads con teléfono real (nunca phone vacío)
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT id, place_id, status, notes, lead_json, updated_at
                 FROM saved_leads
+                WHERE lead_json LIKE '%phone%'
                 ORDER BY updated_at DESC
-                LIMIT 3000
+                LIMIT 5000
                 """
             ).fetchall()
+        best: dict[str, Any] | None = None
         for row in rows:
             lead = json.loads(row["lead_json"])
-            phone = lead.get("phone") or ""
-            ph = "".join(ch for ch in phone if ch.isdigit())
-            if ph.endswith(needle) or needle.endswith(ph[-10:] if len(ph) >= 10 else ph):
-                item = dict(row)
-                item["lead"] = lead
-                item.pop("lead_json", None)
+            if not _phone_match(lead.get("phone")):
+                continue
+            item = dict(row)
+            item["lead"] = lead
+            item.pop("lead_json", None)
+            # Preferir leads de campaña / contactados
+            if (lead.get("campaign") or "") or row["status"] in (
+                "contacted",
+                "responded",
+                "follow_up",
+            ):
                 return item
-        return None
+            if best is None:
+                best = item
+        return best
 
     def list_campaign_leads_by_status(
         self, campaign_tag: str, status: str, limit: int = 100
