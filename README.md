@@ -130,18 +130,21 @@ Flujo de producto: **Twilio = solo el primer mensaje** → cuando contestan, seg
 
 | KPI | Significado |
 |-----|-------------|
-| En base | Leads del CSV limpio |
-| Pendientes de envío | Aún no recibieron el WA de Twilio |
+| En base | Todos los leads del **CRM** (todas las bases: Mendoza + Córdoba + …) |
+| Pendientes de envío | En CRM y aún sin envío live Twilio |
 | Enviados | Mensajes live únicos vía Twilio |
-| Contestaron | Respondieron al primer mensaje |
-| Contactados sin reply | Enviados, todavía no contestaron |
+| Por contestar (humano) | Prioridad: escribió una persona |
+| Solo auto-reply | Bot/ausencia; un humano puede retomar después |
+| En seguimiento | Marcaste “Ya contesté” |
+| Sin reply | Contactados, todavía no contestaron |
 
-Los KPIs son **clickeables**: abren la misma tabla de leads (con mensajes inbound) filtrada por ese KPI. Botón flotante **↑ KPIs** / cerrar para volver.
+Los KPIs son **clickeables**: abren la tabla de leads (con mensajes inbound) filtrada por ese KPI.
 
 **Bases y zonas**
 
 - Upload CSV con nombre de **base** (`base_name`); cada lead guarda `lead_json.base`
 - Dropdown **Bases en CRM** (conteos: leads / enviados / pendientes)
+- El **inbox** (Prioridad / auto-reply) se filtra por la base elegida; sin base, elegí una antes de operar
 - Tras elegir una base: **Zonas ya contactadas** → click abre KPI `sent` filtrado por zona
 - **No reenvía** a un `place_id` o teléfono ya contactado en *cualquier* envío live (aunque esté en otra base)
 
@@ -154,29 +157,38 @@ Inbound WhatsApp se clasifica en `app/services/reply_classify.py`:
 | Prioridad | Humano o humano después de auto-reply (hay que contestar) |
 | Solo auto-reply | Mensajes de ausencia / bots; un humano puede retomar después |
 | En seguimiento | Marcaste “Ya contesté” |
+| Descartado | STOP / opt-out — **no** aparece en Prioridad |
 
 - Hilos con humano (o retomó después del auto) **siguen en Prioridad** aunque estén en follow-up, para no perderlos
 - Auto-replies tipo hotel (“en un momento respondemos…”) se marcan como auto, no como humano
+- Tras un **STOP**, mensajes tipo «gracias» no reabren Prioridad ni disparan aviso
 
 **Avisos al dueño (KPI Prioridad / humano)**
 
-Cuando un inbound pasa a «Por contestar (humano)» (primera vez del hilo, no cada mensaje), SofIA puede avisarte:
+Cuando un inbound **entra** a «Por contestar (humano)» (primera vez del hilo, no cada mensaje), SofIA te avisa por WhatsApp (plantilla Utility). Servicio: `app/services/owner_alerts.py`.
 
 | Variable | Uso |
 |----------|-----|
 | `ALERT_WHATSAPP_TO` | Tu celular |
-| `ALERT_WHATSAPP_TEMPLATE_SID` | Plantilla Utility (sin esto Meta rechaza fuera de 24h, error 63016). Crear: `python scripts/create_wa_alert_template.py` |
+| `ALERT_WHATSAPP_TEMPLATE_SID` | Plantilla Utility `sofia_owner_prioridad_v1` (sin esto Meta rechaza fuera de 24h, **63016**). Crear: `python scripts/create_wa_alert_template.py` |
 | `ALERT_EMAIL_TO` + `SMTP_*` | Email opcional |
 | `ALERT_DASHBOARD_URL` | Link en el mensaje |
 | `ALERT_ON_HUMAN_REPLY` | `false` para apagar |
 
-Probar: `POST /api/campaigns/mendoza-cabanas/alerts/test` (con el servidor local que recibe el webhook). El aviso solo dispara si Twilio llega a esa instancia (túnel/ngrok).
+- No avisa si hubo **STOP** / lead descartado
+- Solo dispara en la instancia que recibe el webhook Twilio (local + túnel)
+- Probar (PowerShell):
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/campaigns/mendoza-cabanas/alerts/test" | ConvertTo-Json -Depth 5
+```
 
 **Acciones del dashboard**
 
 - Upload/sync CSV, lotes dry-run/live (**Enviar lote** = hasta N pendientes; saltea ya enviados)
-- Tabla Contestaron + **Abrir en mi WhatsApp**
-- **Respuestas rápidas** de venta: pitch “más info” con `{{nombre}}` / `{{demo_url}}` + Copiar
+- Tabla Contestaron + **Abrir en mi WhatsApp** / **Usar nombre**
+- **Respuestas rápidas**: pitch “más info” con `{{nombre}}` / `{{demo_url}}` + Copiar (exige nombre del complejo)
+- Cierre del pitch: invitación calmada (“lo vemos con calma”), no cierre de venta duro
 - Link a **Demo bot** (`https://review-leads.onrender.com/demo`)
 - Log técnico de Twilio en un `<details>` colapsado
 
@@ -195,7 +207,7 @@ Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin t
 | Sesión | En memoria; si el server recarga, reiniciá el chat |
 | Rate limit | ~20 sesiones nuevas / IP / hora |
 
-**Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”. Incluye el link público y precio **$19.000/mes**.
+**Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”. Incluye `DEMO_PUBLIC_URL` (Render o túnel) y precio **$19.000/mes**. El nombre del complejo se completa con **Usar nombre** / Abrir WhatsApp.
 
 Nunca pegues `http://127.0.0.1` en el pitch: el lead no puede abrirlo.
 
@@ -210,11 +222,12 @@ Nunca pegues `http://127.0.0.1` en el pitch: el lead no puede abrirlo.
 #### Twilio (producción)
 
 1. Sender WhatsApp **+54** ONLINE (no Sandbox US para blast)
-2. Plantilla **MARKETING** aprobada: `{{1}}`=nombre, `{{2}}`=zona, precio fijo en el texto  
+2. Plantilla **MARKETING** de primer contacto: `{{1}}`=nombre, `{{2}}`=zona  
    Crear/enviar a Meta: `python scripts/create_wa_template.py`
-3. `.env`: `TWILIO_WHATSAPP_FROM`, `TWILIO_TEMPLATE_SID`, `TWILIO_SEND_ENABLED=true`
-4. Webhook inbound (URL pública): `POST /api/twilio/whatsapp/inbound`  
-   Local: túnel (`cloudflared` / ngrok) apuntando al sender en Twilio
+3. Plantilla **UTILITY** de aviso al dueño (Prioridad): `python scripts/create_wa_alert_template.py` → `ALERT_WHATSAPP_TEMPLATE_SID`
+4. `.env`: `TWILIO_WHATSAPP_FROM`, `TWILIO_TEMPLATE_SID`, `TWILIO_SEND_ENABLED=true`, `ALERT_WHATSAPP_TO`, `ALERT_WHATSAPP_TEMPLATE_SID`
+5. Webhook inbound (URL pública): `POST /api/twilio/whatsapp/inbound`  
+   Local: túnel (`cloudflared` / ngrok) → misma PC donde corre el CRM/SQLite
 
 #### Envío por lotes
 
@@ -386,10 +399,10 @@ app/
 ├── routers/             search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
 ├── db/store.py          SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
 ├── services/            places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
-│                        campaign_send, reply_classify, demo_booking_bot
+│                        campaign_send, reply_classify, owner_alerts, demo_booking_bot
 ├── data/                services, business_types, cabanas_filter, outreach_guidelines, ar_locations
 └── static/              index.html, campaign.html, demo.html, admin.html, js/, css/
-scripts/                 etl/sweep Mendoza+Córdoba, create_wa_template, run_mendoza_remaining.bat, run_demo_tunnel.bat
+scripts/                 etl/sweep Mendoza+Córdoba, create_wa_template, create_wa_alert_template, run_demo_tunnel.bat
 tools/                   cloudflared.exe (túnel local opcional)
 Dockerfile
 fly.toml                 Fly.io — trial vencido
@@ -502,19 +515,21 @@ pip install -r requirements.txt   # si hubo cambios
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-1. `.env` con Google + OpenAI + `OUTREACH_SENDER_*` (+ Twilio si enviás)
-2. Campaña: http://127.0.0.1:8000/campaign  
-3. Demo local: http://127.0.0.1:8000/demo  
-4. Prod leads: https://review-leads.onrender.com/demo  
-5. Tras cambios: `git push mirror HEAD:main` → redeploy Render
+1. `.env` con Google + OpenAI + `OUTREACH_SENDER_*` + Twilio + `ALERT_WHATSAPP_*` (avisos)
+2. Campaña local (CRM en disco): http://127.0.0.1:8000/campaign  
+3. Túnel + webhook Twilio apuntando a esa misma instancia  
+4. Demo leads (prod): https://review-leads.onrender.com/demo  
+5. Tras cambios: `git push mirror HEAD:main` → redeploy Render (demo; el CRM operativo sigue en local)
 
 ## Pendiente / roadmap
 
 - [x] Deploy Render free + UptimeRobot keep-alive
 - [x] Demo `/demo` pública; dashboards con `DASHBOARD_ACCESS_TOKEN`
 - [x] Mirror público `mendozaxmenos-create/review-leads` para deploy (GitHub flaggeado)
-- [x] Pitch “más info” con link Render
+- [x] Pitch “más info” con link Render / túnel + nombre obligatorio al copiar
 - [x] Base Córdoba Punilla+Calamuchita (misma campaña, `base=Córdoba`)
+- [x] Avisos WhatsApp al dueño (plantilla Utility) al entrar a Prioridad
+- [x] KPI «En base» = todo el CRM multi-base
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
 - [ ] Email desde web del negocio (Google no expone email)
@@ -524,6 +539,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Avisos WSP Prioridad (`owner_alerts` + plantilla Utility); no alertar post-STOP; KPI En base = CRM multi-base; pitch cierre empático |
 | Ago 2026 | Base Córdoba (Punilla+Calamuchita): zonas, sweep/ETL, sync multi-base sin pisar Mendoza |
 | Ago 2026 | Render live, demo pública, dashboards con token, mirror deploy, UptimeRobot, pitch más-info |
 | Ago 2026 | Demo interactiva (cabañas, seña MP/transferencia simulada), share-link, rate limit |
