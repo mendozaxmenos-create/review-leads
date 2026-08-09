@@ -269,19 +269,49 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 ### Base Córdoba · cabañas (misma campaña)
 
-Misma campaña / dashboard (`/campaign`), nueva **`base=Córdoba`**. Cobertura v1: **Punilla + Calamuchita** (11 zonas).
+Misma campaña / dashboard (`/campaign`), **`base=Córdoba`**. Cobertura v1: **Punilla + Calamuchita** (11 zonas).
+
+Preferí el pipeline genérico (abajo). Legacy: `cordoba_cabanas_sweep` / `etl_cordoba_cabanas`.
+
+### Expansión Argentina · Ola 1 + filtro reservas online
+
+Objetivo: más bases de cabañas **sin quemar Twilio** en alojamientos que ya tienen Booking/Airbnb/motor propio.
+
+**Bases Ola 1** (registro `CABANAS_BASES` en [`app/data/ar_locations.py`](app/data/ar_locations.py)):
+
+| Base CRM | Zonas |
+|----------|-------|
+| Buenos Aires (interior) | Tandil, Sierra de la Ventana, Villa Ventana |
+| San Luis | El Trapiche, Merlo, Potrero de los Funes |
+| Salta | Cafayate, Cachi, San Lorenzo |
+| Jujuy | Purmamarca, Tilcara, Humahuaca |
+| Neuquén | San Martín de los Andes, Villa La Angostura, Villa Traful |
+| Río Negro | Bariloche, Circuito Chico, El Bolsón, Las Grutas |
+
+(+ Mendoza y Córdoba en el mismo registro para CLI unificado.)
+
+**Filtro booking** ([`app/services/booking_signals.py`](app/services/booking_signals.py)): hard-exclude en ETL si el `website` es OTA/directorio o el HTML tiene motor (Cloudbeds, Little Hotelier, etc.). Instagram/WhatsApp **no** excluyen. Fallo de fetch ≠ exclude.
 
 ```bash
-# 1) Barrido Places
-.venv\Scripts\python -m scripts.cordoba_cabanas_sweep --mode directory
+# Listar bases
+.venv\Scripts\python -m scripts.cabanas_sweep --list-bases
 
-# 2) Depurar + ETL
-.venv\Scripts\python -m scripts.depurar_cordoba_cabanas --no-crm
-.venv\Scripts\python -m scripts.etl_cordoba_cabanas
+# Una base: sweep → ETL → CRM
+.venv\Scripts\python -m scripts.cabanas_sweep --base "San Luis" --mode directory --max-places 35
+.venv\Scripts\python -m scripts.etl_cabanas_base --base "San Luis" --fetch-booking --sync-crm
 
-# 3) Sync CRM (no pisa el clean CSV de Mendoza)
-.venv\Scripts\python -c "from pathlib import Path; from app.services.mendoza_campaign import sync_etl_clean_to_crm; print(sync_etl_clean_to_crm(csv_path=Path('data/exports/cordoba-cabanas-etl-clean.csv'), base_name='Córdoba'))"
+# Ola 1 completa (orden costo Places)
+.venv\Scripts\python -m scripts.run_cabanas_ola1 --max-places 35
+
+# Re-ETL bases viejas (Mendoza/Córdoba) con filtro booking
+.venv\Scripts\python -m scripts.etl_cabanas_base --base Mendoza --in data/exports/mendoza-cabanas-ready.csv --fetch-booking --sync-crm
+.venv\Scripts\python -m scripts.etl_cabanas_base --base Córdoba --in data/exports/cordoba-cabanas-ready.csv --fetch-booking --sync-crm
 ```
+
+Salidas: `data/exports/campaign-{Base}.csv`, `*-etl-clean.csv`, `*-etl-quarantine.csv`.  
+El envío Twilio **omite** filas con `has_online_booking=yes` y leads `discarded`.
+
+### Base Córdoba · cabañas (legacy CLI)
 
 Salidas: `data/exports/cordoba-cabanas-*.csv`, `cordoba-cabanas-etl-clean.csv`, `campaign-Córdoba.csv`.  
 API: `GET /api/campaigns/cordoba-cabanas/zones`, `POST /api/campaigns/cordoba-cabanas`.  
@@ -408,10 +438,11 @@ app/
 ├── routers/             search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
 ├── db/store.py          SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
 ├── services/            places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
-│                        campaign_send, reply_classify, owner_alerts, demo_booking_bot
+│                        campaign_send, reply_classify, owner_alerts, booking_signals, demo_booking_bot
 ├── data/                services, business_types, cabanas_filter, outreach_guidelines, ar_locations
 └── static/              index.html, campaign.html, demo.html, admin.html, js/, css/
-scripts/                 etl/sweep Mendoza+Córdoba, create_wa_template, create_wa_alert_template, run_demo_tunnel.bat
+scripts/                 cabanas_sweep, etl_cabanas_base, run_cabanas_ola1, mark_booking_discards,
+│                        create_wa_template, create_wa_alert_template, sweep/ETL Mendoza+Córdoba legacy
 tools/                   cloudflared.exe (túnel local opcional)
 Dockerfile
 fly.toml                 Fly.io — trial vencido
@@ -540,6 +571,13 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Avisos WhatsApp al dueño (plantilla Utility) al entrar a Prioridad
 - [x] KPI «En base» = todo el CRM multi-base
 - [x] `share-link` / pitch rechazan túneles (trycloudflare, ngrok, localhost) → Render
+- [x] Ola 1 multi-provincia (BA interior, San Luis, Salta, Jujuy, Neuquén, Río Negro) + ETL/sync
+- [x] Filtro hard `booking_signals` (OTA/motor) + re-ETL Mendoza/Córdoba
+- [ ] **Ola 2:** Chubut, Calafate, TdF, Catamarca, La Rioja, Entre Ríos, Misiones interior
+- [ ] Barrido nacional único (solo si Ola 1 valida unit economics)
+- [ ] Places `reservable` / Google Reserve en `booking_signals`
+- [ ] A/B plantilla WhatsApp y precio post-filtro
+- [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
 - [ ] Email desde web del negocio (Google no expone email)
@@ -549,6 +587,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Ola 1 AR (6 bases), pipeline `cabanas_sweep`/`etl_cabanas_base`, filtro reservas online, re-ETL Mza/Cba |
 | Ago 2026 | Demo bot: anti prompt-injection / off-topic (no responde mates, historia, jailbreaks; redirige a la reserva) |
 | Ago 2026 | Pitch/demo: `DEMO_PUBLIC_URL` default Render; share-link ignora túneles; docs ops locales vs demo prod |
 | Ago 2026 | Avisos WSP Prioridad (`owner_alerts` + plantilla Utility); no alertar post-STOP; KPI En base = CRM multi-base; pitch cierre empático |

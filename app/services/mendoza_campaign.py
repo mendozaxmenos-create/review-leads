@@ -30,15 +30,16 @@ def csv_path_default() -> Path:
 
 
 def csv_path_for_base(base_name: str | None) -> Path:
-    """CSV de envío según base seleccionada (no pisa Mendoza al usar Córdoba)."""
+    """CSV de envío según base seleccionada (no pisa Mendoza al usar otras bases)."""
     base = (base_name or "").strip()
     if not base or base.casefold() == "mendoza":
         return csv_path_default()
     export = Path(__file__).resolve().parents[2] / "data" / "exports"
-    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in base)[:40]
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in base)[:48]
     candidates = [
         export / f"campaign-{base}.csv",
         export / f"campaign-{safe}.csv",
+        export / f"{safe.lower()}-cabanas-etl-clean.csv",
     ]
     if "cordoba" in base.casefold() or "córdoba" in base.casefold():
         candidates.insert(0, export / "cordoba-cabanas-etl-clean.csv")
@@ -132,6 +133,10 @@ def sync_etl_clean_to_crm(
             "zone": zone,
             "base": base,
             "already_messaged": already_messaged,
+            "has_online_booking": str(row.get("has_online_booking") or "no").lower()
+            in ("yes", "true", "1"),
+            "booking_signal": row.get("booking_signal") or "",
+            "etl_score": row.get("etl_score") or "",
         }
         before = prev is not None
         store.upsert_saved_lead(place_id=place_id, lead=lead, search_history_id=history_id)
@@ -464,11 +469,15 @@ async def run_mendoza_wa_campaign(
     already_places |= store.campaign_sent_place_ids(CAMPAIGN_ID, live_only=True) if skip_already_sent else set()
     queue = []
     skipped_dup = 0
+    skipped_booking = 0
     for row in leads:
         pid = row.get("place_id") or ""
         phone = str(row.get("phone") or row.get("phone_e164") or "")
         digits = "".join(ch for ch in phone if ch.isdigit())
         phone_key = digits[-10:] if len(digits) >= 10 else digits
+        if str(row.get("has_online_booking") or "").lower() in ("yes", "true", "1"):
+            skipped_booking += 1
+            continue
         if skip_already_sent and not dry_run:
             if pid in already_places or (phone_key and phone_key in already_phones):
                 skipped_dup += 1
@@ -613,6 +622,7 @@ async def run_mendoza_wa_campaign(
         f"{sent_ok}/{len(queue)} OK, {failed} fallidos, "
         f"{crm_updated} CRM contacted"
         + (f", {skipped_dup} omitidos (ya enviados en alguna base)" if skipped_dup else "")
+        + (f", {skipped_booking} omitidos (ya tienen reservas online)" if skipped_booking else "")
         + "."
     )
     return SendCampaignResponse(

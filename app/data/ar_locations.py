@@ -110,6 +110,95 @@ CORDOBA_CABANAS_ZONES: list[CampaignZone] = [
     CampaignZone("cba-cumbrecita", "La Cumbrecita", -31.8972, -64.7722, 10, 13),
 ]
 
+# --- Ola 1 expansión AR (cabañas / complejos) ---
+
+BUENOS_AIRES_INTERIOR_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("ba-tandil", "Tandil", -37.3217, -59.1332, 14, 12),
+    CampaignZone("ba-sierra-ventana", "Sierra de la Ventana", -38.1367, -61.7933, 14, 12),
+    CampaignZone("ba-villa-ventana", "Villa Ventana", -38.0833, -61.9333, 12, 12),
+]
+
+SAN_LUIS_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("sl-trapiche", "El Trapiche", -33.1167, -66.0667, 12, 12),
+    CampaignZone("sl-merlo", "Merlo", -32.3428, -65.0139, 14, 12),
+    CampaignZone("sl-potrero", "Potrero de los Funes", -33.2167, -66.2333, 12, 12),
+]
+
+SALTA_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("sal-cafayate", "Cafayate", -26.0728, -65.9761, 14, 12),
+    CampaignZone("sal-cachi", "Cachi", -25.1200, -66.1650, 12, 12),
+    CampaignZone("sal-san-lorenzo", "San Lorenzo / cerros Salta", -24.7280, -65.4860, 12, 12),
+]
+
+JUJUY_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("juj-purmamarca", "Purmamarca", -23.7458, -65.4992, 12, 12),
+    CampaignZone("juj-tilcara", "Tilcara", -23.5767, -65.3506, 12, 12),
+    CampaignZone("juj-humahuaca", "Humahuaca", -23.2056, -65.3503, 12, 12),
+]
+
+NEUQUEN_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("nq-sma", "San Martín de los Andes", -40.1579, -71.3534, 14, 12),
+    CampaignZone("nq-vla", "Villa La Angostura", -40.7617, -71.6464, 14, 12),
+    CampaignZone("nq-traful", "Villa Traful", -40.6583, -71.4000, 12, 12),
+]
+
+RIO_NEGRO_CABANAS_ZONES: list[CampaignZone] = [
+    CampaignZone("rn-bariloche", "Bariloche (centro)", -41.1335, -71.3103, 14, 12),
+    CampaignZone("rn-circuito-chico", "Bariloche · Circuito Chico", -41.0833, -71.5333, 12, 12),
+    CampaignZone("rn-el-bolson", "El Bolsón", -41.9667, -71.5167, 14, 12),
+    CampaignZone("rn-las-grutas", "Las Grutas", -40.8028, -65.0778, 12, 12),
+]
+
+# Registro de bases CRM → zonas (incluye Mendoza/Córdoba para CLI genérico).
+CABANAS_BASES: dict[str, list[CampaignZone]] = {
+    "Mendoza": MENDOZA_CABANAS_ZONES,
+    "Córdoba": CORDOBA_CABANAS_ZONES,
+    "Buenos Aires (interior)": BUENOS_AIRES_INTERIOR_CABANAS_ZONES,
+    "San Luis": SAN_LUIS_CABANAS_ZONES,
+    "Salta": SALTA_CABANAS_ZONES,
+    "Jujuy": JUJUY_CABANAS_ZONES,
+    "Neuquén": NEUQUEN_CABANAS_ZONES,
+    "Río Negro": RIO_NEGRO_CABANAS_ZONES,
+}
+
+# Orden de barrido Ola 1 (costo Places / saturación OTA).
+CABANAS_OLA1_ORDER: tuple[str, ...] = (
+    "Buenos Aires (interior)",
+    "San Luis",
+    "Salta",
+    "Jujuy",
+    "Neuquén",
+    "Río Negro",
+)
+
+
+def list_cabanas_base_names() -> list[str]:
+    return list(CABANAS_BASES.keys())
+
+
+def list_cabanas_zones_for_base(base_name: str) -> list[CampaignZone]:
+    key = (base_name or "").strip()
+    if key in CABANAS_BASES:
+        return list(CABANAS_BASES[key])
+    # match casefold
+    want = key.casefold()
+    for name, zones in CABANAS_BASES.items():
+        if name.casefold() == want:
+            return list(zones)
+    raise KeyError(
+        f"Base desconocida: {base_name!r}. Válidas: {', '.join(CABANAS_BASES)}"
+    )
+
+
+def cabanas_base_center(base_name: str) -> tuple[float, float]:
+    zones = list_cabanas_zones_for_base(base_name)
+    if not zones:
+        return (-34.0, -64.0)
+    lat = sum(z.lat for z in zones) / len(zones)
+    lng = sum(z.lng for z in zones) / len(zones)
+    return (lat, lng)
+
+
 # Mantener presets de mapa alineados con zonas nuevas de campaña.
 _EXTRA_MENDOZA_PRESETS = [
     LocationPreset(z.id, f"Mendoza · {z.label}", z.lat, z.lng, z.zoom, "city")
@@ -123,7 +212,15 @@ _EXTRA_CORDOBA_PRESETS = [
     for z in CORDOBA_CABANAS_ZONES
 ]
 
-ALL_PRESETS: list[LocationPreset] = AR_PROVINCES + MENDOZA_DEPARTMENTS + _EXTRA_CORDOBA_PRESETS
+_EXTRA_OLA1_PRESETS = [
+    LocationPreset(z.id, f"{base} · {z.label}", z.lat, z.lng, z.zoom, "city")
+    for base in CABANAS_OLA1_ORDER
+    for z in CABANAS_BASES[base]
+]
+
+ALL_PRESETS: list[LocationPreset] = (
+    AR_PROVINCES + MENDOZA_DEPARTMENTS + _EXTRA_CORDOBA_PRESETS + _EXTRA_OLA1_PRESETS
+)
 
 
 def list_mendoza_cabanas_zones() -> list[CampaignZone]:
