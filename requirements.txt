@@ -7,3 +7,6 @@ openai>=1.57.0
 python-dotenv>=1.0.1
 twilio>=9.0.0
 python-multipart>=0.0.9
+# Opcional para AVAILABILITY_SOURCE=sheets (demo CSV no las necesita)
+google-auth>=2.28.0
+google-api-python-client>=2.120.0

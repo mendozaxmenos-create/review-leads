@@ -4,6 +4,8 @@ venv/
 /data/*
 !/data/demo_availability/
 !/data/demo_availability/**
+secrets/
+*.json.key
 __pycache__/
 *.py[cod]
 *.egg-info/

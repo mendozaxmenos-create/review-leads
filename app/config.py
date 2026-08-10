@@ -30,10 +30,23 @@ class Settings(BaseSettings):
     # true = bloquea envíos LIVE aunque TWILIO_SEND_ENABLED=true (pausa por conversión)
     campaign_send_paused: bool = True
 
-    # Fuente de disponibilidad del bot demo (csv = planilla real en disco)
-    availability_source: str = "csv"  # csv | memory
+    # Fuente de disponibilidad del bot (csv = demo local; sheets = planilla del dueño)
+    availability_source: str = "csv"  # csv | sheets
     availability_csv_dir: str = "data/demo_availability"
     availability_deposit_pct: int = 30
+    # Google Sheets (cualquier dueño): IDs/rangos por env — sin hardcodear un cliente.
+    # Dual planilla: calendario (solo lectura) + pre-reservas (escritura). Fallback = un solo ID.
+    availability_sheets_spreadsheet_id: str = ""
+    availability_sheets_calendar_spreadsheet_id: str = ""
+    availability_sheets_reservations_spreadsheet_id: str = ""
+    availability_sheets_cabins_range: str = "Cabins!A:Z"
+    availability_sheets_blocked_range: str = "BlockedDates!A:Z"
+    availability_sheets_reservations_range: str = "Prereservas!A:Z"
+    # Service account (opcional salvo AVAILABILITY_SOURCE=sheets)
+    google_service_account_json: str = ""  # JSON inline
+    google_service_account_file: str = ""  # path a .json
+    google_service_account_email: str = ""
+    google_private_key: str = ""
 
     # Demo pública para el pitch. Default = Render. No uses túnel trycloudflare acá.
     # DEMO_PUBLIC_URL=https://review-leads.onrender.com  → pitch usa …/demo

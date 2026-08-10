@@ -60,10 +60,13 @@ Editá `.env` (ver `.env.example`):
 | `OUTREACH_SENDER_COMPANY` | Empresa remitente (default: `SofIA`) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Credenciales Twilio |
 | `TWILIO_WHATSAPP_FROM` | Sender prod ej. `whatsapp:+549…` (Sandbox: `whatsapp:+14155238886`) |
-| `TWILIO_TEMPLATE_SID` | Content SID plantilla marketing aprobada (`HX…`) |
+| `TWILIO_TEMPLATE_SID` | Content SID marketing. v6 Approved: `HXe3ccdf3ea2ee04bb6bc0d39f87914b01` (`sofia_cabanas_v6_noprecio`) |
 | `TWILIO_SEND_ENABLED` | `true` = envío live; `false` = dry-run |
 | `CAMPAIGN_SEND_PAUSED` | `true` (default) = bloquea LIVE aunque send_enabled; pausa por conversión |
 | `TWILIO_SEND_DELAY_SECONDS` | Pausa entre mensajes (default `3`) |
+| `AVAILABILITY_SOURCE` | `csv` (default, demo) o `sheets` (planilla del dueño) |
+| `AVAILABILITY_SHEETS_*` | IDs/rangos Sheets — ver `.env.example` (cualquier dueño) |
+| `GOOGLE_SERVICE_ACCOUNT_*` | Credenciales SA opcionales (requeridas solo si `sheets`) |
 | `DEMO_PUBLIC_URL` | Origen del pitch/demo. Default/recomendado: `https://review-leads.onrender.com` (sin `/demo`). **No** uses túnel trycloudflare/ngrok acá |
 | `ALERT_WHATSAPP_TO` | Tu celular para avisos de Prioridad |
 | `ALERT_WHATSAPP_TEMPLATE_SID` | Content SID plantilla Utility de avisos (`HX…`) |
@@ -228,9 +231,25 @@ Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin t
 | Sesión | En memoria; si el server recarga, reiniciá el chat |
 | Rate limit | ~20 sesiones nuevas / IP / hora |
 
-**Planilla CSV (v1 fuente real):** el bot ya no inventa ocupación. Por defecto `AVAILABILITY_SOURCE=csv` apunta a `data/demo_availability/` (`cabins.csv`, `blocked_dates.csv`, `prereservas.csv`) — planilla genérica de muestra SofIA, no datos de un cliente. Al arrancar se siembra si faltan archivos. El panel izquierdo de `/demo` muestra la fuente conectada.
+**Planilla CSV (default):** el bot ya no inventa ocupación. Por defecto `AVAILABILITY_SOURCE=csv` apunta a `data/demo_availability/` (`cabins.csv`, `blocked_dates.csv`, `prereservas.csv`) — planilla genérica de muestra SofIA, no datos de un cliente. Al arrancar se siembra si faltan archivos. El panel izquierdo de `/demo` muestra la fuente conectada.
 
-**Adapter `AvailabilitySource`:** contrato único en `app/services/availability/` para conectar *cualquier* fuente del dueño (CSV ahora; más adelante Google Sheets / Excel / PMS / API con IDs configurables). `CAMPAIGN_SEND_PAUSED` sigue en `true` (no reactivar envíos Twilio live).
+**Adapter `AvailabilitySource`:** contrato único en `app/services/availability/` para *cualquier* dueño:
+- `csv` (default) — demo local sin Google
+- `sheets` — Google Sheets config-driven (`AVAILABILITY_SHEETS_*` + service account)
+
+Patrón dual (inspirado en operaciones reales, IDs por cliente): **leer** calendario/cabins/blocked; **escribir** solo pre-reservas. El bot nunca escribe el calendario. `CAMPAIGN_SEND_PAUSED` sigue en `true` (no reactivar envíos Twilio live).
+
+```bash
+# Cliente X — ejemplo (reemplazar IDs; no hardcodear un brand)
+AVAILABILITY_SOURCE=sheets
+AVAILABILITY_SHEETS_CALENDAR_SPREADSHEET_ID=<id_calendario>
+AVAILABILITY_SHEETS_RESERVATIONS_SPREADSHEET_ID=<id_prereservas>
+AVAILABILITY_SHEETS_CABINS_RANGE=Cabins!A:Z
+AVAILABILITY_SHEETS_BLOCKED_RANGE=BlockedDates!A:Z
+AVAILABILITY_SHEETS_RESERVATIONS_RANGE=Prereservas!A:Z
+GOOGLE_SERVICE_ACCOUNT_FILE=secrets/sa.json
+# Compartir SA: Lector en calendario, Editor en pre-reservas
+```
 
 **Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”.
 
@@ -301,13 +320,15 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 - ~766 enviados live · ~1–2% reply humano · **0 clientes pagos** · ~USD 40–45 Twilio/mes  
 - **`CAMPAIGN_SEND_PAUSED=true` (default):** bloquea envíos LIVE en dashboard/CLI hasta retomar  
-- Plantilla **v6 sin precio** enviada a Meta: `sofia_cabanas_v6_noprecio` → SID `HXe3ccdf3ea2ee04bb6bc0d39f87914b01` (esperar Approved; luego `TWILIO_TEMPLATE_SID=…` y `CAMPAIGN_SEND_PAUSED=false`)  
+- Plantilla **v6 sin precio** Meta **Approved**: `sofia_cabanas_v6_noprecio` → `HXe3ccdf3ea2ee04bb6bc0d39f87914b01`  
+  - Cómo activar: `TWILIO_TEMPLATE_SID=HXe3ccdf3ea2ee04bb6bc0d39f87914b01` en `.env` (no tocar aún el pause)  
+  - Envíos live: seguir con `CAMPAIGN_SEND_PAUSED=true` hasta lote-prueba ≤20  
 - Demo white-label: `/demo?nombre=TuComplejo` (Pitch + WhatsApp ya agrega `?nombre=`)  
 - Pitch/demo: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción  
 
 **Mejora activa (sin gastar Twilio):**
-1. Esperar aprobación Meta de v6  
-2. ~~Conector real planilla → bot~~ → **hecho (CSV)**; próximo adapter = Sheets/Excel/PMS genérico por dueño  
+1. ~~Esperar aprobación Meta de v6~~ → **Approved**; opcional cambiar `TWILIO_TEMPLATE_SID` (pause sigue on)  
+2. ~~Conector planilla → bot~~ → CSV + **Google Sheets** genérico (`AVAILABILITY_SOURCE=sheets`)  
 3. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano  
 
 ```bash
@@ -645,11 +666,12 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] **Ola 2:** zonas + pipeline `run_cabanas_ola2` (Chubut, Calafate/TdF, Catamarca, La Rioja, Entre Ríos, Misiones)
 - [x] Pitch/demo: fuente disponibilidad (planilla/sistema) + quick reply objeción + panel demo
 - [x] `CAMPAIGN_SEND_PAUSED` + banner dashboard (freno de gasto)
-- [x] Plantilla cold v6 sin precio (`create_wa_template_v6`) — pendiente aprobación Meta
+- [x] Plantilla cold v6 sin precio (`create_wa_template_v6`) — Meta **Approved**
 - [x] Demo white-label `?nombre=` + pitch con link personalizado
 - [x] Conector planilla CSV real → bot (`app/services/availability/`, seed `data/demo_availability/`)
-- [ ] Adapter Google Sheets / Excel / PMS (mismo contrato `AvailabilitySource`; IDs por dueño)
-- [ ] Tras Meta Approved: cambiar `TWILIO_TEMPLATE_SID` a v6 y lote-prueba ≤20
+- [x] Adapter Google Sheets genérico (`sheets_source.py`; IDs/rangos por env, cualquier dueño)
+- [ ] Cambiar `TWILIO_TEMPLATE_SID` a v6 en el `.env` de ops + lote-prueba ≤20 (pause sigue hasta entonces)
+- [ ] Excel / PMS detrás del mismo `AvailabilitySource`
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
 - [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
@@ -662,6 +684,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Adapter Google Sheets genérico (`AVAILABILITY_SOURCE=sheets`); v6 Meta Approved (docs: cómo switch SID; pause on) |
 | Ago 2026 | Planilla CSV real como `AvailabilitySource` v1; demo lee/escribe `data/demo_availability/`; panel fuente en `/demo` |
 | Ago 2026 | Pausa envíos (`CAMPAIGN_SEND_PAUSED`); plantilla v6 sin precio a Meta; demo `?nombre=`; pitch/fuente disponibilidad |
 | Ago 2026 | Pitch/demo: fuente disponibilidad + quick reply; gate de gasto Ola 2; doc conversión ~1–2% humano / 0 pagos |

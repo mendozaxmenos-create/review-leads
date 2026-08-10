@@ -62,7 +62,10 @@ def main() -> int:
     print(ar.text[:2000])
     ar.raise_for_status()
     print("TWILIO_TEMPLATE_SID=" + sid)
-    print("Cuando Meta apruebe, reemplazá TWILIO_TEMPLATE_SID en .env y poné CAMPAIGN_SEND_PAUSED=false")
+    print(
+        "Si Meta status=approved: seteá TWILIO_TEMPLATE_SID a este SID. "
+        "Dejá CAMPAIGN_SEND_PAUSED=true hasta lote-prueba ≤20."
+    )
     return 0
 
 

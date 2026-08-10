@@ -1,4 +1,4 @@
-"""Fuente de disponibilidad para el bot (planilla CSV / Sheets)."""
+"""Fuente de disponibilidad para el bot (CSV local o Google Sheets del dueño)."""
 
 from __future__ import annotations
 
