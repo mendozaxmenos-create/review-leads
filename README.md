@@ -1,19 +1,22 @@
 # Review Leads / SofIA
 
-App para buscar reseñas de Google, clasificar leads con IA y operar la campaña Mendoza (cabañas): Twilio → handoff WhatsApp personal → demo del bot de reservas.
+App para buscar reseñas de Google, clasificar leads con IA y operar la campaña SofIA (cabañas AR): Twilio → handoff WhatsApp personal → demo del bot de reservas.
+
+Visión producto multi-cliente: [`docs/PRODUCT.md`](docs/PRODUCT.md) (**SofIA Ops**).
 
 | Entorno | URL / estado |
 |---------|----------------|
 | **Producción (Render free)** | https://review-leads.onrender.com — **activo** |
-| **Demo para leads** | https://review-leads.onrender.com/demo — **pública** (sin token) |
-| **Dashboard campaña** | https://review-leads.onrender.com/campaign?k=`DASHBOARD_ACCESS_TOKEN` |
-| **CRM** | https://review-leads.onrender.com/admin?k=`DASHBOARD_ACCESS_TOKEN` |
+| **Demo para leads** | https://review-leads.onrender.com/demo — **pública** (sin token); white-label `?nombre=` |
+| **Dashboard campaña (ops CRM)** | Local: `http://127.0.0.1:8000/campaign?k=` · Prod: `/campaign?k=` |
 | **Local** | http://127.0.0.1:8000 |
 | **Repo deploy (público)** | https://github.com/mendozaxmenos-create/review-leads (`main`) |
-| **Repo original** | https://github.com/schejtergustavo/review-leads — puede no ser clonable por terceros (cuenta GitHub restringida); Render usa el **mirror** |
+| **Repo original** | https://github.com/schejtergustavo/review-leads — puede no ser clonable por terceros; Render usa el **mirror** |
 | **Fly.io** | Suspendido (trial vencido) |
 
 Keep-alive: UptimeRobot → `GET https://review-leads.onrender.com/health` cada 5 min.
+
+**Nota:** el CRM operativo de la campaña es **`/campaign`** (SQLite local). `/admin` es el CRM genérico de barridos; no reemplaza el inbox Priority.
 
 ## Qué hace
 
@@ -25,9 +28,10 @@ Keep-alive: UptimeRobot → `GET https://review-leads.onrender.com/health` cada 
 6. **Agrupa por negocio** y por **rubro** en la UI; extrae temas de queja
 7. Devuelve leads con pitch, valor de la solución y reseñas en español
 8. Genera mensajes de outreach (WhatsApp / email) y simula conversación con bot de ventas
-9. **CRM** en `/admin` con pipeline de estados
-10. **Campaña Mendoza** (`/campaign`): Twilio primer contacto, inbox clasificado, handoff a WhatsApp personal
-11. **Demo del bot de reservas** (`/demo`) para mostrar el producto a leads
+9. **CRM genérico** en `/admin` (barridos / reseñas)
+10. **Campaña SofIA** (`/campaign`): Twilio, inbox Priority, `ops_stage`, pitch + demo
+11. **Demo bot de reservas** (`/demo?nombre=`) white-label para cerrar leads
+12. Visión multi-cliente: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 
 ## Requisitos
 
@@ -321,10 +325,10 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 - ~766 enviados live · ~1–2% reply humano · **0 clientes pagos** · ~USD 40–45 Twilio/mes  
 - **`CAMPAIGN_SEND_PAUSED=true` (default):** bloquea envíos LIVE en dashboard/CLI hasta retomar  
 - Plantilla **v6 sin precio** Meta **Approved**: `sofia_cabanas_v6_noprecio` → `HXe3ccdf3ea2ee04bb6bc0d39f87914b01`  
-  - Cómo activar: `TWILIO_TEMPLATE_SID=HXe3ccdf3ea2ee04bb6bc0d39f87914b01` en `.env` (no tocar aún el pause)  
-  - Envíos live: seguir con `CAMPAIGN_SEND_PAUSED=true` hasta lote-prueba ≤20  
-- Demo white-label: `/demo?nombre=TuComplejo` (Pitch + WhatsApp ya agrega `?nombre=`)  
-- Pitch/demo: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción  
+  - Local `.env` ya puede apuntar al SID v6; **pause sigue on**  
+  - Envíos live: solo piloto ≤20 cuando haya señal de cierre  
+- Demo white-label: `/demo?nombre=TuComplejo` (Pitch + WhatsApp agrega `?nombre=`)  
+- Demo UX: hero al instante, negrita en chat, CTA Consultar en fechas, sin botón CRM “Abrir demo” (redundante con el pitch)  
 
 **Cierre Priority (primer cliente — sin gastar Twilio):**
 
@@ -333,18 +337,24 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 .venv\Scripts\python -m scripts.list_priority_leads
 ```
 
+API útil:
+- `GET /api/campaigns/mendoza-cabanas/priority`
+- `POST /api/campaigns/mendoza-cabanas/ops-stage` `{ "place_id", "ops_stage": "pending|contacted|demo|closed|lost" }`
+
 En `/campaign`:
-1. Contactar cada Priority (playbook 3 msgs: ack → demo → cierre)  
-2. Marcar etapa: pendiente → contactado → demo → cerrado / perdido  
-3. Botón **Pitch + WhatsApp** (copia pitch + abre chat; el link de la demo va adentro)  
-4. Éxito: ≥1 demo con nombre + decisión piloto o “no ahora”  
+1. ~~Contactar cada Priority~~ → **hecho** (ago 2026); esperando replies  
+2. Marcar etapa: contactado → demo → cerrado / perdido según respuesta  
+3. **Pitch + WhatsApp** = único handoff (copia pitch + abre chat; demo adentro)  
+4. Éxito: ≥1 demo seria + decisión piloto o “no ahora”  
 5. Recién ahí: `CAMPAIGN_SEND_PAUSED=false` solo para piloto ≤20 con v6  
 
 **Mejora activa (sin gastar Twilio):**
-1. ~~Esperar aprobación Meta de v6~~ → **Approved**; opcional cambiar `TWILIO_TEMPLATE_SID` (pause sigue on)  
-2. ~~Conector planilla → bot~~ → CSV + **Google Sheets** genérico (`AVAILABILITY_SOURCE=sheets`)  
+1. ~~Esperar aprobación Meta de v6~~ → **Approved**  
+2. ~~Conector planilla → bot~~ → CSV + Sheets genérico  
 3. ~~CRM seguimiento Priority~~ → `ops_stage` + playbook + `list_priority_leads`  
-4. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano (después del cierre Priority)
+4. ~~Demo impecable para pitch~~ → white-label + polish UX en Render  
+5. **Esperar conversión Priority** → si hay tracción, piloto ≤20; si no, iterar oferta (no blast)  
+6. Visión multi-cliente: [`docs/PRODUCT.md`](docs/PRODUCT.md)
 
 ```bash
 # Crear/reenviar plantilla v6 (sin precio)
@@ -686,8 +696,12 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Conector planilla CSV real → bot (`app/services/availability/`, seed `data/demo_availability/`)
 - [x] Adapter Google Sheets genérico (`sheets_source.py`; IDs/rangos por env, cualquier dueño)
 - [x] CRM Priority: `ops_stage` + playbook 3 msgs + `scripts/list_priority_leads` (cierre manual; pause on)
-- [ ] Cambiar `TWILIO_TEMPLATE_SID` a v6 en el `.env` de ops + lote-prueba ≤20 (pause sigue hasta primer cliente / piloto)
+- [x] Demo UX polish (hero `?nombre=`, markdown bold, CTA fechas, sin Abrir demo redundante)
+- [x] Docs visión SofIA Ops (`docs/PRODUCT.md`)
+- [ ] Primer cliente / piloto ≤20 con v6 (pause off solo con señal de cierre)
 - [ ] Excel / PMS detrás del mismo `AvailabilitySource`
+- [ ] Builder de audiencia multi-rubro (ver PRODUCT.md)
+- [ ] Multi-workspace / tenant
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
 - [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
@@ -700,7 +714,9 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
-| Ago 2026 | CRM Priority: etapas ops + playbook 3 msgs + `list_priority_leads`; demo UX polish (sin botón Abrir demo redundante) |
+| Ago 2026 | Docs: estado Priority contactados + `docs/PRODUCT.md` (SofIA Ops); README ops/API/demo |
+| Ago 2026 | Demo polish: bold, hero instantáneo, CTA Consultar, welcome corto (`364fa7c`) |
+| Ago 2026 | CRM Priority: etapas ops + playbook 3 msgs + `list_priority_leads`; demo UX (sin Abrir demo) |
 | Ago 2026 | Adapter Google Sheets genérico (`AVAILABILITY_SOURCE=sheets`); v6 Meta Approved (docs: cómo switch SID; pause on) |
 | Ago 2026 | Planilla CSV real como `AvailabilitySource` v1; demo lee/escribe `data/demo_availability/`; panel fuente en `/demo` |
 | Ago 2026 | Pausa envíos (`CAMPAIGN_SEND_PAUSED`); plantilla v6 sin precio a Meta; demo `?nombre=`; pitch/fuente disponibilidad |
