@@ -1285,7 +1285,20 @@ function exportSelected() {
   URL.revokeObjectURL(url);
 }
 
+function bindDashboardNav() {
+  const link = document.getElementById("nav-campaign");
+  if (!link) return;
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = (params.get("k") || "").trim();
+  if (fromUrl) sessionStorage.setItem("sofia_dash_k", fromUrl);
+  const k = fromUrl || (sessionStorage.getItem("sofia_dash_k") || "").trim();
+  if (!k) return;
+  const sep = link.href.includes("?") ? "&" : "?";
+  link.href = `${link.pathname}${sep}k=${encodeURIComponent(k)}`;
+}
+
 function bindEvents() {
+  bindDashboardNav();
   els.radius?.addEventListener("input", updateCircle);
   els.searchBtn.addEventListener("click", runSearch);
   els.mendozaCabanasBtn?.addEventListener("click", runMendozaCabanasCampaign);
