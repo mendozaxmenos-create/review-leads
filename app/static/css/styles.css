@@ -1544,7 +1544,7 @@ details#advanced-logs summary {
   }
 }
 
-/* CampaÃÂ±a: respuestas rÃÂ¡pidas */
+/* CampaÃÂÃÂ±a: respuestas rÃÂÃÂ¡pidas */
 .quick-replies {
   display: grid;
   gap: 0.85rem;
@@ -1582,7 +1582,7 @@ details#advanced-logs summary {
   opacity: 0.92;
 }
 
-/* Ã¯Â¿Â½Ã¯Â¿Â½Ã¯Â¿Â½ Demo booking bot Ã¯Â¿Â½Ã¯Â¿Â½Ã¯Â¿Â½ */
+/* ÃÂ¯ÃÂ¿ÃÂ½ÃÂ¯ÃÂ¿ÃÂ½ÃÂ¯ÃÂ¿ÃÂ½ Demo booking bot ÃÂ¯ÃÂ¿ÃÂ½ÃÂ¯ÃÂ¿ÃÂ½ÃÂ¯ÃÂ¿ÃÂ½ */
 .demo-body {
   min-height: 100vh;
 }
@@ -1624,6 +1624,47 @@ details#advanced-logs summary {
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.5;
+}
+
+.demo-source {
+  margin: 1rem 0 1.25rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(45, 212, 160, 0.06);
+}
+
+.demo-source h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.demo-source-hint {
+  margin: 0 0 0.65rem;
+}
+
+.demo-source-grid {
+  display: grid;
+  gap: 0.45rem 0.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.demo-source-grid div {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.demo-source-grid dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.demo-source-grid dd {
+  margin: 0;
+  color: var(--text);
 }
 
 .demo-chat {
@@ -1738,12 +1779,12 @@ details#advanced-logs summary {
 }
 
 .demo-dates-panel > summary::before {
-  content: "Ã¢ÂÂ¸ ";
+  content: "ÃÂ¢ÃÂÃÂ¸ ";
   color: var(--accent);
 }
 
 .demo-dates-panel[open] > summary::before {
-  content: "Ã¢ÂÂ¾ ";
+  content: "ÃÂ¢ÃÂÃÂ¾ ";
 }
 
 .demo-dates {

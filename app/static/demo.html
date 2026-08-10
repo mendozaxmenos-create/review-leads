@@ -18,7 +18,7 @@
         <p class="brand-mark">SofIA</p>
         <h1>Probá el bot de reservas</h1>
         <p class="brand-tagline">
-          Chat del huésped + panel CRM del dueño. Mercado Pago se confirma con un webhook simulado (sin cobro real).
+          Chat del huésped + panel dueño. Disponibilidad conectada a planilla/sistema (en demo, simulada). Seña MP/transferencia sin cobro real.
         </p>
       </div>
     </header>
@@ -33,6 +33,30 @@
           <li>Pagá seña: transferencia o Mercado Pago</li>
           <li>MP → simulá el webhook; transferencia → aprobá en CRM</li>
         </ul>
+
+        <section class="demo-source" aria-label="Fuente de disponibilidad">
+          <h3>Fuente de disponibilidad <span class="map-hint">(demo)</span></h3>
+          <p class="map-hint demo-source-hint">
+            En producción el bot lee <strong>tu</strong> planilla, calendario o sistema.
+            Acá simulamos esa fuente para que veas el flujo.
+          </p>
+          <dl class="demo-source-grid">
+            <div>
+              <dt>Lectura</dt>
+              <dd>Calendario · fechas ocupadas</dd>
+            </div>
+            <div>
+              <dt>Escritura</dt>
+              <dd>Pre-reservas (seña pendiente)</dd>
+            </div>
+            <div>
+              <dt>Estado</dt>
+              <dd id="demo-source-status">Conectado · demo</dd>
+            </div>
+          </dl>
+          <p class="map-hint">También se conecta a Excel, PMS o API si ya lo usás.</p>
+        </section>
+
         <p class="map-hint" id="turns-left"></p>
         <button type="button" class="btn btn-secondary btn-sm" id="restart-btn">Reiniciar chat</button>
 
@@ -99,7 +123,8 @@
           </div>
         </form>
         <p class="map-hint demo-foot">
-          Esto es una muestra. Si te gusta, pedile a Gustavo de SofIA que lo arme con tu complejo.
+          Muestra SofIA. En un complejo real la disponibilidad sale de su planilla/sistema; acá está simulada.
+          Si te gusta, pedile a Gustavo que lo arme con el tuyo.
         </p>
       </section>
     </main>
@@ -109,6 +134,6 @@
       <p>El bot está respondiendo…</p>
     </div>
 
-    <script src="/static/js/demo.js?v=14"></script>
+    <script src="/static/js/demo.js?v=15"></script>
   </body>
 </html>

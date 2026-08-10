@@ -287,9 +287,16 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 1. Encender PC → uvicorn local + túnel cloudflared al webhook inbound  
 2. `/campaign` → chequear **Saldo Twilio** y **Prioridad** (contestar humanos primero)  
-3. Ola 1 está **agotada** (~1 pendiente). Mandar desde bases **Ola 2** (dropdown)  
-4. Lotes chicos (10–20), pausa entre bases; dry-run 1 antes del live si dudás  
+3. Ola 1 agotada; stock Ola 2 en CRM (~262 pend. al cargar)  
+4. **Gate de gasto:** sin al menos 1 piloto/demo seria o mejora clara de reply humano, **no** quemar Ola 2 completa — lotes de prueba ≤20 y medir  
 5. Preflight: `python -m scripts.monday_ready_check`
+
+#### Estado conversión (ops, ago 2026)
+
+- ~766 enviados live · ~1–2% reply humano · **0 clientes pagos** · ~USD 40–45 Twilio/mes  
+- El stack de campaña (filtro booking, multi-base, handoff, demo, alertas) está **operativo**  
+- Lo que **aún no** está listo para “máquina de clientes”: plantilla cold **sin precio** (sigue v5 con $19.000), conector real planilla→bot (la demo solo *explica* la fuente), caso Villa Oliva en el pitch como prueba social fuerte  
+- Pitch/demo actualizados: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción; precio anclado a “noche perdida” (sin jerga OTA)
 
 ### Base Córdoba · cabañas (misma campaña)
 
@@ -617,9 +624,11 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Fix match inbound: no atribuir a leads sin teléfono; priorizar `campaign_sends`
 - [x] Dashboard: Saldo + Cargado Twilio; Pitch + WhatsApp; mensajes inbound completos
 - [x] **Ola 2:** zonas + pipeline `run_cabanas_ola2` (Chubut, Calafate/TdF, Catamarca, La Rioja, Entre Ríos, Misiones)
+- [x] Pitch/demo: fuente disponibilidad (planilla/sistema) + quick reply objeción + panel demo
+- [ ] **Plantilla cold sin precio** (Meta) + medir reply humano vs v5
+- [ ] Conector real planilla/PMS → bot (hoy solo narrado en demo)
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
-- [ ] A/B plantilla WhatsApp y precio post-filtro
 - [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
 - [ ] Volumen persistente o DB externa para CRM permanente
 - [ ] Sesiones demo en Redis/SQLite (hoy en memoria; se pierden al reload)
@@ -630,6 +639,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Pitch/demo: fuente disponibilidad + quick reply; gate de gasto Ola 2; doc conversión ~1–2% humano / 0 pagos |
 | Ago 2026 | Ola 2 zonas + `run_cabanas_ola2`; checklist lunes; Pitch+WhatsApp; Saldo/Cargado Twilio async |
 | Ago 2026 | Dashboard: **Saldo Twilio** + **Cargado Twilio (mes)** (Balance + Usage totalprice) |
 | Ago 2026 | Fix match inbound (`find_lead_by_phone_digits`): prioriza envíos live, ignora phone vacío; scripts scan/repair; doc inbox por base |

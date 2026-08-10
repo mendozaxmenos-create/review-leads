@@ -133,6 +133,7 @@ const CHIP_SETS = {
     { label: "Quiero reservar", text: "Me interesa, quiero reservar. ¿Cómo seguimos?" },
     { label: "¿Precio total?", text: "¿Cuánto sería el total de la estadía?" },
     { label: "¿Seña?", text: "¿Cuánto es la seña y cómo la pago?" },
+    { label: "¿Disponibilidad?", text: "¿Cómo sabe el bot si hay lugar disponible?" },
     { label: "Check-in", text: "¿A qué hora es el check-in y el check-out?" },
   ],
   units: [],
@@ -167,6 +168,7 @@ const CHIP_SETS = {
     { label: "Reiniciar demo", text: "__restart__" },
   ],
   general: [
+    { label: "¿De dónde saca la disponibilidad?", text: "¿Cómo sabe el bot si hay lugar? ¿Lee mi planilla?" },
     { label: "¿Precio?", text: "¿Cuánto sale por noche?" },
     { label: "Quiero reservar", text: "Me interesa, quiero reservar." },
     { label: "Check-in", text: "¿A qué hora es el check-in?" },

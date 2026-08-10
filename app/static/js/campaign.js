@@ -37,18 +37,31 @@ const QUICK_REPLIES = [
   {
     id: "pitch",
     title: "Más info — pitch con demo",
-    body: `Cómo estás, Soy Gustavo de SofIA - Desarrollo de Software. Te escribo por {{nombre}}, te cuento rápido.
+    body: `Cómo estás, Soy Gustavo de SofIA. Te escribo por {{nombre}}.
 
-SofIA arma un bot de WhatsApp para {{nombre}}: el huésped escribe a tu número y el bot atiende solo — fechas, disponibilidad, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche ni el finde.
+La idea: el huésped escribe a *tu* WhatsApp y el bot atiende solo — fechas, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche.
 
-Probá la demo vos mismo (2 min, como si fueras un huésped):
+La disponibilidad la toma de *tu* fuente (planilla Google/Excel, calendario o el sistema que ya uses). No te pedimos cambiar de plataforma: conectamos lo que tengas, como en un complejo real que ya lo está usando.
+
+Probá la demo 2 min (como si fueras un huésped):
 {{demo_url}}
 
-Pedí fechas, elegí cabaña y simulá la seña. Es exactamente la experiencia que tendrían tus reservas.
+Pedí fechas, mirá el panel “Fuente de disponibilidad” y simulá la seña.
 
-Valor: $19.000/mes. Lo dejamos funcionando con tus precios, reglas y check-in.
+Si te gustó, lo vemos con calma (piloto corto o setup). El valor mensual suele salir menos que *una* noche que se te escapa por no contestar a tiempo.
+`,
+  },
+  {
+    id: "disponibilidad",
+    title: "Objeción — ¿de dónde saca la disponibilidad?",
+    body: `Buena pregunta.
 
-Si te gustó la demo o te quedó alguna duda de cómo quedaría en {{nombre}}, escribime y lo vemos con calma.`,
+El bot no inventa el calendario: se conecta a la fuente que uses vos — planilla (Google Sheets / Excel), sistema de reservas o lo que ya tengas. Lee ocupación, aplica tus reglas (mínimo de noches, seña, etc.) y deja la pre-reserva anotada.
+
+En la demo se ve el panel “Fuente de disponibilidad (demo)”; en {{nombre}} quedaría enganchado a *tu* planilla o sistema.
+
+Demo: {{demo_url}}
+Si querés, lo vemos con calma.`,
   },
   {
     id: "no",
@@ -278,13 +291,13 @@ function renderQuickReplies() {
   const hasName = Boolean(placeToken());
   els.quickReplies.innerHTML = QUICK_REPLIES.map((r) => {
     const filled = fillReply(r.body);
-    const needsName = r.id === "pitch" && !hasName;
+    const needsName = (r.id === "pitch" || r.id === "disponibilidad") && !hasName;
     return `<article class="quick-reply-card" data-reply-id="${escapeHtml(r.id)}">
       <div class="quick-reply-head">
         <h3>${escapeHtml(r.title)}</h3>
         <button type="button" class="btn btn-sm btn-primary" data-copy-reply="${escapeHtml(r.id)}">Copiar</button>
       </div>
-      ${needsName ? `<p class="map-hint">Tocá <strong>Usar nombre</strong> en el lead (o escribí el complejo arriba) antes de copiar.</p>` : ""}
+      ${needsName ? `<p class="map-hint">Tocá <strong>Pitch + WhatsApp</strong> en el lead (o escribí el complejo arriba) antes de copiar.</p>` : ""}
       <pre>${escapeHtml(filled)}</pre>
     </article>`;
   }).join("");
@@ -293,8 +306,8 @@ function renderQuickReplies() {
     btn.addEventListener("click", () => {
       const item = QUICK_REPLIES.find((x) => x.id === btn.dataset.copyReply);
       if (!item) return;
-      if (item.id === "pitch" && !placeToken()) {
-        showError("Falta el nombre del complejo. Tocá «Usar nombre» en el lead o completá el campo «Nombre del complejo».");
+      if ((item.id === "pitch" || item.id === "disponibilidad") && !placeToken()) {
+        showError("Falta el nombre del complejo. Tocá «Pitch + WhatsApp» en el lead o completá el campo «Nombre del complejo».");
         els.replyPlaceName?.focus();
         return;
       }
