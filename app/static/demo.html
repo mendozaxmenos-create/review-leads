@@ -35,26 +35,29 @@
         </ul>
 
         <section class="demo-source" aria-label="Fuente de disponibilidad">
-          <h3>Fuente de disponibilidad <span class="map-hint">(demo)</span></h3>
-          <p class="map-hint demo-source-hint">
-            En producción el bot lee <strong>tu</strong> planilla, calendario o sistema.
-            Acá simulamos esa fuente para que veas el flujo.
+          <h3>Fuente de disponibilidad</h3>
+          <p class="map-hint demo-source-hint" id="demo-source-hint">
+            El bot lee una planilla real (CSV local; mismo contrato que Google Sheets).
           </p>
           <dl class="demo-source-grid">
             <div>
-              <dt>Lectura</dt>
-              <dd>Calendario · fechas ocupadas</dd>
+              <dt>Fuente</dt>
+              <dd id="demo-source-label">…</dd>
             </div>
             <div>
-              <dt>Escritura</dt>
-              <dd>Pre-reservas (seña pendiente)</dd>
+              <dt>Detalle</dt>
+              <dd id="demo-source-detail">…</dd>
+            </div>
+            <div>
+              <dt>Cabañas</dt>
+              <dd id="demo-source-cabins">…</dd>
             </div>
             <div>
               <dt>Estado</dt>
-              <dd id="demo-source-status">Conectado · demo</dd>
+              <dd id="demo-source-status">…</dd>
             </div>
           </dl>
-          <p class="map-hint">También se conecta a Excel, PMS o API si ya lo usás.</p>
+          <p class="map-hint">Editá <code>data/demo_availability/*.csv</code> y reiniciá el chat para ver el cambio.</p>
         </section>
 
         <p class="map-hint" id="turns-left"></p>

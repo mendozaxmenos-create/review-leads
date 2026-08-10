@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # true = bloquea envíos LIVE aunque TWILIO_SEND_ENABLED=true (pausa por conversión)
     campaign_send_paused: bool = True
 
+    # Fuente de disponibilidad del bot demo (csv = planilla real en disco)
+    availability_source: str = "csv"  # csv | memory
+    availability_csv_dir: str = "data/demo_availability"
+    availability_deposit_pct: int = 30
+
     # Demo pública para el pitch. Default = Render. No uses túnel trycloudflare acá.
     # DEMO_PUBLIC_URL=https://review-leads.onrender.com  → pitch usa …/demo
     demo_public_url: str = "https://review-leads.onrender.com"

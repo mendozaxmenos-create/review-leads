@@ -1,0 +1,5 @@
+id,name,capacity,price_night,type,quality,amenities,note,active
+calma,Cabaña Calma,2,85000,pareja,estándar,"Wifi, cocina, estacionamiento",Ideal 2 personas,yes
+hornero,Cabaña Hornero,4,120000,familiar,superior,"Wifi, cocineta, parrilla, estacionamiento",Hasta 4,yes
+quincho,Cabaña del Quincho,6,165000,familiar grande,premium,"Wifi, cocina completa, quincho, cochera",Grupos,yes
+esencia,Cabaña Esencia,4,140000,familiar,premium,"Wifi, hidromasaje, vista",La más pedida,yes

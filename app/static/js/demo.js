@@ -8,6 +8,11 @@ const els = {
   turns: document.getElementById("turns-left"),
   propName: document.getElementById("demo-property-name"),
   propZone: document.getElementById("demo-property-zone"),
+  sourceHint: document.getElementById("demo-source-hint"),
+  sourceLabel: document.getElementById("demo-source-label"),
+  sourceDetail: document.getElementById("demo-source-detail"),
+  sourceCabins: document.getElementById("demo-source-cabins"),
+  sourceStatus: document.getElementById("demo-source-status"),
   chips: document.getElementById("chips"),
   chipsLabel: document.querySelector(".demo-guides-label"),
   datesPanel: document.querySelector(".demo-dates-panel"),
@@ -139,7 +144,7 @@ const CHIP_SETS = {
   units: [],
   book: [
     { label: "Sí, reservo", text: "Sí, quiero la pre-reserva." },
-    { label: "¿Cómo pago la seña?", text: "Dale, ¿cómo pago la seña del 30%?" },
+    { label: "¿Cómo pago la seña?", text: "Dale, ¿cómo pago la seña?" },
     { label: "Otra fecha", text: "¿Tenés otra fecha disponible?" },
   ],
   pay: [
@@ -391,6 +396,21 @@ function demoPlaceNameFromUrl() {
   }
 }
 
+function renderAvailabilitySource(prop) {
+  const src = prop?.availability_source || {};
+  if (els.sourceLabel) els.sourceLabel.textContent = src.label || "Planilla";
+  if (els.sourceDetail) els.sourceDetail.textContent = src.detail || "—";
+  if (els.sourceCabins) els.sourceCabins.textContent = String(src.cabins ?? "—");
+  if (els.sourceStatus) {
+    els.sourceStatus.textContent = src.connected === false ? "Sin planilla" : "Conectado";
+  }
+  if (els.sourceHint) {
+    els.sourceHint.textContent = src.connected
+      ? "El bot consulta esta fuente al pedir fechas (calendario + pre-reservas)."
+      : "No se encontró la planilla CSV — se usó catálogo de respaldo.";
+  }
+}
+
 async function startSession() {
   setLoading(true);
   els.messages.innerHTML = "";
@@ -404,6 +424,7 @@ async function startSession() {
       els.propZone.textContent = data.property.white_label
         ? `${zone} · catálogo de muestra (nombre de tu complejo)`
         : zone || "Complejo ficticio (se elige al azar)";
+      renderAvailabilitySource(data.property);
     }
     onBotReply(data);
   } catch (err) {

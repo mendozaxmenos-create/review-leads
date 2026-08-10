@@ -224,8 +224,13 @@ Página **pública** para que el prospecto pruebe el producto (sin Twilio, sin t
 | API | `POST /api/demo/session`, `/chat`, `/simulate-mp-payment`, `/approve-transfer`, `/reject-transfer` |
 | Share | `GET /api/demo/share-link` → siempre URL estable de Render (ignora túneles/localhost en `DEMO_PUBLIC_URL`) |
 | Bot | `app/services/demo_booking_bot.py` (máquina de estados + OpenAI opcional; **rechaza off-topic / jailbreak**) |
+| Disponibilidad | Planilla CSV real (`data/demo_availability/`) vía `app/services/availability/` — lee cabins/blocked, escribe pre-reservas |
 | Sesión | En memoria; si el server recarga, reiniciá el chat |
 | Rate limit | ~20 sesiones nuevas / IP / hora |
+
+**Planilla CSV (v1 fuente real):** el bot ya no inventa ocupación. Por defecto `AVAILABILITY_SOURCE=csv` apunta a `data/demo_availability/` (`cabins.csv`, `blocked_dates.csv`, `prereservas.csv`) — planilla genérica de muestra SofIA, no datos de un cliente. Al arrancar se siembra si faltan archivos. El panel izquierdo de `/demo` muestra la fuente conectada.
+
+**Adapter `AvailabilitySource`:** contrato único en `app/services/availability/` para conectar *cualquier* fuente del dueño (CSV ahora; más adelante Google Sheets / Excel / PMS / API con IDs configurables). `CAMPAIGN_SEND_PAUSED` sigue en `true` (no reactivar envíos Twilio live).
 
 **Pitch WhatsApp** (cuando el lead pide más info): plantilla en `/campaign` → “Más info — pitch con demo”.
 
@@ -302,7 +307,7 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 
 **Mejora activa (sin gastar Twilio):**
 1. Esperar aprobación Meta de v6  
-2. Conector real planilla → bot (siguiente gran entregable)  
+2. ~~Conector real planilla → bot~~ → **hecho (CSV)**; próximo adapter = Sheets/Excel/PMS genérico por dueño  
 3. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano  
 
 ```bash
@@ -498,9 +503,11 @@ app/
 ├── routers/             search, geocode, admin, history, outreach, projects, campaigns, twilio_webhooks, demo
 ├── db/store.py          SQLite: caché, historial, CRM, campaign_sends/messages, bases/zonas
 ├── services/            places, classifier, geocode, outreach, twilio_whatsapp, mendoza_campaign,
-│                        campaign_send, reply_classify, owner_alerts, booking_signals, demo_booking_bot
+│                        campaign_send, reply_classify, owner_alerts, booking_signals, demo_booking_bot,
+│                        availability/ (CSV planilla + factory; Sheets/PMS después)
 ├── data/                services, business_types, cabanas_filter, outreach_guidelines, ar_locations
 └── static/              index.html, campaign.html, demo.html, admin.html, js/, css/
+data/demo_availability/  seed planilla CSV (cabins, blocked_dates, prereservas)
 scripts/                 cabanas_sweep, etl_cabanas_base, run_cabanas_ola1, mark_booking_discards,
 │                        create_wa_template, create_wa_alert_template, sweep/ETL Mendoza+Córdoba legacy
 tools/                   cloudflared.exe (túnel local opcional)
@@ -640,7 +647,8 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] `CAMPAIGN_SEND_PAUSED` + banner dashboard (freno de gasto)
 - [x] Plantilla cold v6 sin precio (`create_wa_template_v6`) — pendiente aprobación Meta
 - [x] Demo white-label `?nombre=` + pitch con link personalizado
-- [ ] Conector real planilla/PMS → bot (hoy solo narrado en demo)
+- [x] Conector planilla CSV real → bot (`app/services/availability/`, seed `data/demo_availability/`)
+- [ ] Adapter Google Sheets / Excel / PMS (mismo contrato `AvailabilitySource`; IDs por dueño)
 - [ ] Tras Meta Approved: cambiar `TWILIO_TEMPLATE_SID` a v6 y lote-prueba ≤20
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
@@ -654,6 +662,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Planilla CSV real como `AvailabilitySource` v1; demo lee/escribe `data/demo_availability/`; panel fuente en `/demo` |
 | Ago 2026 | Pausa envíos (`CAMPAIGN_SEND_PAUSED`); plantilla v6 sin precio a Meta; demo `?nombre=`; pitch/fuente disponibilidad |
 | Ago 2026 | Pitch/demo: fuente disponibilidad + quick reply; gate de gasto Ola 2; doc conversión ~1–2% humano / 0 pagos |
 | Ago 2026 | Ola 2 zonas + `run_cabanas_ola2`; checklist lunes; Pitch+WhatsApp; Saldo/Cargado Twilio async |
