@@ -6,6 +6,7 @@ import asyncio
 import csv
 from pathlib import Path
 
+from app.config import settings
 from app.db.store import get_store
 from app.models.schemas import (
     SendCampaignItemResult,
@@ -227,6 +228,12 @@ def campaign_dashboard_stats() -> dict:
         "webhook_inbound": "/api/twilio/whatsapp/inbound",
         "bases": store.list_campaign_bases(CAMPAIGN_TAG),
         "sent_zones": store.list_sent_zones(CAMPAIGN_ID, live_only=True),
+        "send_paused": bool(settings.campaign_send_paused),
+        "send_paused_reason": (
+            "Envíos live pausados: priorizamos conversión (plantilla sin precio + demo creíble) antes de gastar más Twilio."
+            if settings.campaign_send_paused
+            else None
+        ),
     }
 
 
@@ -426,6 +433,10 @@ def list_kpi_leads(kpi: str, *, limit: int = 500, zone: str | None = None) -> di
 def _blockers() -> list[str]:
     twilio = TwilioWhatsAppService()
     blockers: list[str] = []
+    if settings.campaign_send_paused:
+        blockers.append(
+            "CAMPAIGN_SEND_PAUSED=true — envíos live pausados (mejorar conversión antes de gastar)"
+        )
     if not twilio.account_sid or not twilio.auth_token:
         blockers.append("Faltan TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN")
     if not twilio.from_number or "14155238886" in twilio.from_number:
@@ -452,6 +463,11 @@ async def run_mendoza_wa_campaign(
     """
     twilio = TwilioWhatsAppService()
     if not dry_run:
+        if settings.campaign_send_paused:
+            raise ValueError(
+                "CAMPAIGN_SEND_PAUSED=true — envíos live pausados. "
+                "Poné CAMPAIGN_SEND_PAUSED=false en .env cuando la conversión esté lista."
+            )
         if not twilio.send_enabled:
             raise ValueError("TWILIO_SEND_ENABLED=false")
         ok, msg = twilio.configured_for_live()

@@ -41,9 +41,9 @@ const QUICK_REPLIES = [
 
 La idea: el huésped escribe a *tu* WhatsApp y el bot atiende solo — fechas, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche.
 
-La disponibilidad la toma de *tu* fuente (planilla Google/Excel, calendario o el sistema que ya uses). No te pedimos cambiar de plataforma: conectamos lo que tengas, como en un complejo real que ya lo está usando.
+La disponibilidad la toma de *tu* fuente (planilla Google/Excel, calendario o el sistema que ya uses). No te pedimos cambiar de plataforma: conectamos lo que tengas — ya corre así en un complejo real de Mendoza.
 
-Probá la demo 2 min (como si fueras un huésped):
+Probá la demo 2 min (abre con el nombre de {{nombre}}):
 {{demo_url}}
 
 Pedí fechas, mirá el panel “Fuente de disponibilidad” y simulá la seña.
@@ -103,6 +103,7 @@ const els = {
   quickReplies: document.getElementById("quick-replies"),
   replyPlaceName: document.getElementById("reply-place-name"),
   replyDemoUrl: document.getElementById("reply-demo-url"),
+  sendPauseBanner: document.getElementById("send-pause-banner"),
 };
 
 /** @type {string|null} */
@@ -208,11 +209,27 @@ function placeToken() {
 
 function demoLink() {
   const custom = (els.replyDemoUrl?.value || "").trim();
-  if (custom) return custom.replace(/\/$/, "");
-  if (typeof window !== "undefined" && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) {
-    return `${window.location.origin}/demo`;
+  let base = custom.replace(/\/$/, "");
+  if (!base) {
+    if (typeof window !== "undefined" && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) {
+      base = `${window.location.origin}/demo`;
+    } else {
+      base = "https://review-leads.onrender.com/demo";
+    }
   }
-  return "https://review-leads.onrender.com/demo";
+  if (!/\/demo\/?$/i.test(base) && !base.includes("/demo?")) {
+    base = base.replace(/\/$/, "") + "/demo";
+  }
+  const nombre = placeToken();
+  if (!nombre) return base;
+  try {
+    const u = new URL(base);
+    u.searchParams.set("nombre", nombre);
+    return u.toString();
+  } catch {
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}nombre=${encodeURIComponent(nombre)}`;
+  }
 }
 
 async function loadShareLink() {
@@ -437,6 +454,17 @@ function renderStats(d) {
     ? "Para live: " + blockers.join(" · ")
     : "Credenciales OK — podés enviar lotes live.";
   els.liveBtn.disabled = blockers.length > 0;
+  if (els.sendPauseBanner) {
+    if (d.send_paused) {
+      els.sendPauseBanner.hidden = false;
+      els.sendPauseBanner.textContent =
+        d.send_paused_reason ||
+        "Envíos live pausados (CAMPAIGN_SEND_PAUSED). Mejorá conversión antes de gastar Twilio.";
+    } else {
+      els.sendPauseBanner.hidden = true;
+      els.sendPauseBanner.textContent = "";
+    }
+  }
   els.webhookHint.textContent = d.webhook_inbound
     ? `Webhook respuestas (Twilio → acá): ${window.location.origin}${d.webhook_inbound} (ngrok/Fly en local)`
     : "";

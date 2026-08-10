@@ -382,15 +382,28 @@ function onBotReply(data, { skipBubble } = {}) {
   }
 }
 
+function demoPlaceNameFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("nombre") || params.get("name") || "").trim().slice(0, 80);
+  } catch {
+    return "";
+  }
+}
+
 async function startSession() {
   setLoading(true);
   els.messages.innerHTML = "";
   try {
-    const data = await api("/api/demo/session", {});
+    const propertyName = demoPlaceNameFromUrl();
+    const data = await api("/api/demo/session", propertyName ? { property_name: propertyName } : {});
     sessionId = data.session_id;
     if (data.property) {
-      els.propName.textContent = data.property.name || "Demo";
-      els.propZone.textContent = data.property.zone || "";
+      els.propName.textContent = data.property.display_name || data.property.name || "Demo";
+      const zone = data.property.zone || "";
+      els.propZone.textContent = data.property.white_label
+        ? `${zone} · catálogo de muestra (nombre de tu complejo)`
+        : zone || "Complejo ficticio (se elige al azar)";
     }
     onBotReply(data);
   } catch (err) {

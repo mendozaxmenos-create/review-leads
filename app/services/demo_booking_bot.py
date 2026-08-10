@@ -96,8 +96,9 @@ def _money(n: int) -> str:
     return f"${n:,}".replace(",", ".")
 
 
-def _make_property() -> dict[str, Any]:
-    name = random.choice(_FAKE_NAMES)
+def _make_property(display_name: str | None = None) -> dict[str, Any]:
+    custom = (display_name or "").strip()[:80]
+    name = custom if custom else random.choice(_FAKE_NAMES)
     # En demo, una unidad puede estar “ocupada” para forzar alternativas
     blocked = random.choice([None, "hornero", "calma"])
     cabins = []
@@ -105,9 +106,12 @@ def _make_property() -> dict[str, Any]:
         item = dict(c)
         item["available"] = c["id"] != blocked
         cabins.append(item)
+    label = f"{name} · demo SofIA" if custom else f"{name} (demo SofIA)"
     return {
         **_BASE_FACTS,
-        "name": f"{name} (demo SofIA)",
+        "name": label,
+        "display_name": name,
+        "white_label": bool(custom),
         "cabins": cabins,
         "units": _BASE_FACTS["units_summary"],
     }
@@ -144,7 +148,7 @@ def _system_prompt(prop: dict[str, Any]) -> str:
     return f"""
 Sos el asistente de WhatsApp de {prop['name']} en {prop['zone']}.
 Esta es una DEMO de SofIA: mostrás cómo un bot atiende reservas por chat.
-IMPORTANTE: el complejo es FICTICIO (nombre inventado). No digas que existe en Google Maps ni des dirección real.
+{"IMPORTANTE: el nombre del complejo es el del prospecto (white-label); el catálogo de cabañas/precios es DE MUESTRA. No digas que existe en Google Maps ni des dirección real." if prop.get("white_label") else "IMPORTANTE: el complejo es FICTICIO (nombre inventado). No digas que existe en Google Maps ni des dirección real."}
 
 ÁMBITO ESTRICTO (anti prompt-injection):
 - SOLO hablás de: fechas, personas, cabañas/unidades, precios de ESTE complejo, seña, alias/Mercado Pago de la demo, check-in/out, mascotas, WiFi, pasos de la reserva, y (si preguntan) cómo se conecta la disponibilidad a planilla/calendario/sistema.
@@ -431,9 +435,9 @@ def _client() -> AsyncOpenAI | None:
     return AsyncOpenAI(api_key=settings.openai_api_key)
 
 
-def create_session() -> dict[str, Any]:
+def create_session(*, property_name: str | None = None) -> dict[str, Any]:
     sid = uuid.uuid4().hex
-    prop = _make_property()
+    prop = _make_property(property_name)
     welcome = (
         f"¡Hola! 👋 Soy el asistente de *{prop['name']}*.\n\n"
         f"Estamos en {prop['zone']}.\n\n"
@@ -443,6 +447,19 @@ def create_session() -> dict[str, Any]:
         "3) Te muestro las cabañas disponibles (tipo y calidad)\n\n"
         "¿Empezamos? Tocá un atajo o el calendario."
     )
+    if prop.get("white_label"):
+        welcome = (
+            f"¡Hola! 👋 Soy el asistente de *{prop.get('display_name') or prop['name']}* "
+            f"(demo SofIA).\n\n"
+            "El *nombre* es el de tu complejo; el catálogo de cabañas es de muestra para que "
+            "veas el flujo (fechas → disponibilidad → seña).\n\n"
+            f"Zona de ejemplo: {prop['zone']}.\n\n"
+            "Para cotizarte rápido:\n"
+            "1) Elegí fechas (calendario o chips)\n"
+            "2) Decime cuántas personas son\n"
+            "3) Te muestro opciones disponibles\n\n"
+            "¿Empezamos?"
+        )
     _sessions[sid] = {
         "property": prop,
         "history": [{"role": "assistant", "content": welcome}],

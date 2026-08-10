@@ -7,6 +7,7 @@ import csv
 from pathlib import Path
 
 from app.config import settings
+from app.config import settings
 from app.db.store import get_store
 from app.models.schemas import SendCampaignItemResult, SendCampaignResponse
 from app.services.twilio_whatsapp import (
@@ -82,6 +83,10 @@ async def run_send_campaign(
     twilio = TwilioWhatsAppService()
     live_requested = not dry_run
     if live_requested:
+        if settings.campaign_send_paused:
+            raise ValueError(
+                "CAMPAIGN_SEND_PAUSED=true — envíos live pausados hasta mejorar conversión"
+            )
         if not twilio.send_enabled:
             raise ValueError(
                 "Envío real bloqueado: seteá TWILIO_SEND_ENABLED=true y dry_run=false"

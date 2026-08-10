@@ -62,6 +62,7 @@ Editá `.env` (ver `.env.example`):
 | `TWILIO_WHATSAPP_FROM` | Sender prod ej. `whatsapp:+549…` (Sandbox: `whatsapp:+14155238886`) |
 | `TWILIO_TEMPLATE_SID` | Content SID plantilla marketing aprobada (`HX…`) |
 | `TWILIO_SEND_ENABLED` | `true` = envío live; `false` = dry-run |
+| `CAMPAIGN_SEND_PAUSED` | `true` (default) = bloquea LIVE aunque send_enabled; pausa por conversión |
 | `TWILIO_SEND_DELAY_SECONDS` | Pausa entre mensajes (default `3`) |
 | `DEMO_PUBLIC_URL` | Origen del pitch/demo. Default/recomendado: `https://review-leads.onrender.com` (sin `/demo`). **No** uses túnel trycloudflare/ngrok acá |
 | `ALERT_WHATSAPP_TO` | Tu celular para avisos de Prioridad |
@@ -294,9 +295,20 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 #### Estado conversión (ops, ago 2026)
 
 - ~766 enviados live · ~1–2% reply humano · **0 clientes pagos** · ~USD 40–45 Twilio/mes  
-- El stack de campaña (filtro booking, multi-base, handoff, demo, alertas) está **operativo**  
-- Lo que **aún no** está listo para “máquina de clientes”: plantilla cold **sin precio** (sigue v5 con $19.000), conector real planilla→bot (la demo solo *explica* la fuente), caso Villa Oliva en el pitch como prueba social fuerte  
-- Pitch/demo actualizados: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción; precio anclado a “noche perdida” (sin jerga OTA)
+- **`CAMPAIGN_SEND_PAUSED=true` (default):** bloquea envíos LIVE en dashboard/CLI hasta retomar  
+- Plantilla **v6 sin precio** enviada a Meta: `sofia_cabanas_v6_noprecio` → SID `HXe3ccdf3ea2ee04bb6bc0d39f87914b01` (esperar Approved; luego `TWILIO_TEMPLATE_SID=…` y `CAMPAIGN_SEND_PAUSED=false`)  
+- Demo white-label: `/demo?nombre=TuComplejo` (Pitch + WhatsApp ya agrega `?nombre=`)  
+- Pitch/demo: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción  
+
+**Mejora activa (sin gastar Twilio):**
+1. Esperar aprobación Meta de v6  
+2. Conector real planilla → bot (siguiente gran entregable)  
+3. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano  
+
+```bash
+# Crear/reenviar plantilla v6 (sin precio)
+.venv\Scripts\python -m scripts.create_wa_template_v6
+```
 
 ### Base Córdoba · cabañas (misma campaña)
 
@@ -625,8 +637,11 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Dashboard: Saldo + Cargado Twilio; Pitch + WhatsApp; mensajes inbound completos
 - [x] **Ola 2:** zonas + pipeline `run_cabanas_ola2` (Chubut, Calafate/TdF, Catamarca, La Rioja, Entre Ríos, Misiones)
 - [x] Pitch/demo: fuente disponibilidad (planilla/sistema) + quick reply objeción + panel demo
-- [ ] **Plantilla cold sin precio** (Meta) + medir reply humano vs v5
+- [x] `CAMPAIGN_SEND_PAUSED` + banner dashboard (freno de gasto)
+- [x] Plantilla cold v6 sin precio (`create_wa_template_v6`) — pendiente aprobación Meta
+- [x] Demo white-label `?nombre=` + pitch con link personalizado
 - [ ] Conector real planilla/PMS → bot (hoy solo narrado en demo)
+- [ ] Tras Meta Approved: cambiar `TWILIO_TEMPLATE_SID` a v6 y lote-prueba ≤20
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
 - [ ] Cola de envío priorizada en dashboard (sin website / solo WA primero)
@@ -639,6 +654,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | Pausa envíos (`CAMPAIGN_SEND_PAUSED`); plantilla v6 sin precio a Meta; demo `?nombre=`; pitch/fuente disponibilidad |
 | Ago 2026 | Pitch/demo: fuente disponibilidad + quick reply; gate de gasto Ola 2; doc conversión ~1–2% humano / 0 pagos |
 | Ago 2026 | Ola 2 zonas + `run_cabanas_ola2`; checklist lunes; Pitch+WhatsApp; Saldo/Cargado Twilio async |
 | Ago 2026 | Dashboard: **Saldo Twilio** + **Cargado Twilio (mes)** (Balance + Usage totalprice) |

@@ -76,10 +76,17 @@ async def demo_share_link() -> dict:
     }
 
 
+class DemoStartRequest(BaseModel):
+    property_name: str | None = Field(default=None, max_length=80)
+
+
 @router.post("/session")
-async def start_demo_session(request: Request) -> dict:
+async def start_demo_session(
+    request: Request, body: DemoStartRequest | None = None
+) -> dict:
     _rate_limit_session(request)
-    return demo_booking_bot.create_session()
+    name = (body.property_name if body else None) or None
+    return demo_booking_bot.create_session(property_name=name)
 
 
 @router.post("/chat")

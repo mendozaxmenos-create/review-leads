@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     twilio_template_sid: str = ""  # Content SID de la plantilla aprobada
     twilio_send_enabled: bool = False  # false = dry-run (no llama a Twilio)
     twilio_send_delay_seconds: float = 3.0  # sandbox: 1 msg / 3s; prod puede bajar a ~1–2s
+    # true = bloquea envíos LIVE aunque TWILIO_SEND_ENABLED=true (pausa por conversión)
+    campaign_send_paused: bool = True
 
     # Demo pública para el pitch. Default = Render. No uses túnel trycloudflare acá.
     # DEMO_PUBLIC_URL=https://review-leads.onrender.com  → pitch usa …/demo
