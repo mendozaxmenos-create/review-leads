@@ -125,6 +125,8 @@
           <h2>Prioridad — escribió un humano</h2>
           <p class="map-hint">
             Respuestas de personas (o humano después del bot). Atendelos primero.
+            Marcá el <strong>seguimiento</strong> (pendiente → contactado → demo → cerrado/perdido).
+            Envíos Twilio siguen pausados: esto es cierre manual.
           </p>
           <div class="admin-table-scroll">
             <table class="admin-table">
@@ -133,13 +135,14 @@
                   <th>Negocio</th>
                   <th>Zona</th>
                   <th>Tipo</th>
+                  <th>Seguimiento</th>
                   <th>Última respuesta</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="priority-tbody">
                 <tr>
-                  <td colspan="5" class="admin-empty">Nadie humano pendiente todavía</td>
+                  <td colspan="6" class="admin-empty">Nadie humano pendiente todavía</td>
                 </tr>
               </tbody>
             </table>
@@ -173,7 +176,7 @@
 
         <section class="admin-table-wrap panel">
           <h2>En seguimiento — ya contestaste</h2>
-          <p class="map-hint">Si vuelven a escribir por Twilio, vuelven a «por contestar».</p>
+          <p class="map-hint">Si vuelven a escribir por Twilio, vuelven a «por contestar». Actualizá la etapa hasta cerrado/perdido.</p>
           <div class="admin-table-scroll">
             <table class="admin-table">
               <thead>
@@ -181,13 +184,14 @@
                   <th>Negocio</th>
                   <th>Zona</th>
                   <th>Tipo</th>
+                  <th>Seguimiento</th>
                   <th>Última respuesta</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="followup-tbody">
                 <tr>
-                  <td colspan="5" class="admin-empty">Todavía no marcaste ninguno</td>
+                  <td colspan="6" class="admin-empty">Todavía no marcaste ninguno</td>
                 </tr>
               </tbody>
             </table>
@@ -196,15 +200,20 @@
       </div>
 
       <section class="panel campaign-controls">
-        <h2>3. Respuestas rápidas (tu WhatsApp)</h2>
+        <h2>3. Playbook de cierre (tu WhatsApp personal)</h2>
         <p class="map-hint">
-          Respuesta cuando el lead pide más info: en Prioridad usá <strong>Pitch + WhatsApp</strong>
-          (copia el texto con el nombre y abre el chat). También podés copiar acá a mano.
-          Incluye el link público estable de la demo:
-          <code>https://review-leads.onrender.com/demo</code>
-          (no uses túnel trycloudflare en el pitch).
-          El campo URL se completa solo desde <code>/api/demo/share-link</code>.
+          Tres mensajes humanos — no plantilla Meta. Orden sugerido:
+          <strong>1) ack + dolor</strong> → <strong>2) demo</strong> → <strong>3) cierre</strong>.
+          En Prioridad usá <strong>Pitch + WhatsApp</strong> (copia el texto con el link de la demo y abre el chat).
+          Demo pública: <code>https://review-leads.onrender.com/demo?nombre=…</code>
+          (sin túneles). Twilio blast sigue pausado.
         </p>
+        <ol class="map-hint" id="playbook-checklist" style="margin: 0.5rem 0 1rem 1.25rem">
+          <li>Contactar cada Priority y marcar <em>Contactado</em></li>
+          <li>Enviar demo con <code>?nombre=</code> vía Pitch + WhatsApp y marcar <em>Demo enviada</em></li>
+          <li>Cerrar en <em>Cerrado</em> (piloto/pago) o <em>Perdido</em></li>
+          <li>Recién después: considerar piloto ≤20 con v6 (`CAMPAIGN_SEND_PAUSED=false` solo ese lote)</li>
+        </ol>
         <div class="actions-row" style="margin-bottom: 1rem">
           <label>
             Nombre del complejo
@@ -220,7 +229,7 @@
             />
           </label>
         </div>
-        <div id="quick-replies" class="quick-replies" aria-label="Respuestas rápidas"></div>
+        <div id="quick-replies" class="quick-replies" aria-label="Playbook de 3 mensajes"></div>
       </section>
 
       <details class="panel campaign-controls" id="advanced-logs">

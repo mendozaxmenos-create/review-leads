@@ -33,23 +33,49 @@ async function api(path, opts = {}) {
   return data;
 }
 
+const OPS_STAGES = [
+  { id: "pending", label: "Pendiente" },
+  { id: "contacted", label: "Contactado" },
+  { id: "demo", label: "Demo enviada" },
+  { id: "closed", label: "Cerrado" },
+  { id: "lost", label: "Perdido" },
+];
+
 const QUICK_REPLIES = [
   {
+    id: "ack",
+    step: 1,
+    title: "1 · Ack + dolor",
+    body: `Hola, gracias por responder — soy Gustavo de SofIA.
+
+Te escribo por {{nombre}}. ¿Hoy quién contesta el WhatsApp de reservas cuando llegan de noche o en temporada? ¿Se te escapan consultas o noches por demora?
+
+Si querés, te muestro en 2 min cómo queda con un bot en *tu* número.`,
+  },
+  {
     id: "pitch",
-    title: "Más info — pitch con demo",
+    step: 2,
+    title: "2 · Demo personalizada",
     body: `Cómo estás, Soy Gustavo de SofIA. Te escribo por {{nombre}}.
 
 La idea: el huésped escribe a *tu* WhatsApp y el bot atiende solo — fechas, precios, dudas y pre-reserva con seña (transferencia o Mercado Pago). A vos te llega el aviso ordenado; no hace falta estar pegado al celu de noche.
 
-La disponibilidad la toma de *tu* fuente (planilla Google/Excel, calendario o el sistema que ya uses). No te pedimos cambiar de plataforma: conectamos lo que tengas — ya corre así en un complejo real de Mendoza.
+La disponibilidad la toma de *tu* fuente (planilla Google/Excel, calendario o el sistema que ya uses). No te pedimos cambiar de plataforma: conectamos lo que tengas.
 
 Probá la demo 2 min (abre con el nombre de {{nombre}}):
 {{demo_url}}
 
-Pedí fechas, mirá el panel “Fuente de disponibilidad” y simulá la seña.
+Pedí fechas, mirá el panel “Fuente de disponibilidad” y simulá la seña.`,
+  },
+  {
+    id: "close",
+    step: 3,
+    title: "3 · Cierre / piloto",
+    body: `Si te sirvió la demo de {{nombre}}, el siguiente paso es un piloto corto (setup + unas semanas viendo reservas reales).
 
-Si te gustó, lo vemos con calma (piloto corto o setup). El valor mensual suele salir menos que *una* noche que se te escapa por no contestar a tiempo.
-`,
+El valor mensual suele salir menos que *una* noche que se te escapa por no contestar a tiempo.
+
+¿Te copa que lo veamos esta semana o preferís que te deje el link y lo mirás con calma?`,
   },
   {
     id: "disponibilidad",
@@ -58,7 +84,7 @@ Si te gustó, lo vemos con calma (piloto corto o setup). El valor mensual suele 
 
 El bot no inventa el calendario: se conecta a la fuente que uses vos — planilla (Google Sheets / Excel), sistema de reservas o lo que ya tengas. Lee ocupación, aplica tus reglas (mínimo de noches, seña, etc.) y deja la pre-reserva anotada.
 
-En la demo se ve el panel “Fuente de disponibilidad (demo)”; en {{nombre}} quedaría enganchado a *tu* planilla o sistema.
+En la demo se ve el panel “Fuente de disponibilidad”; en {{nombre}} quedaría enganchado a *tu* planilla o sistema.
 
 Demo: {{demo_url}}
 Si querés, lo vemos con calma.`,
@@ -306,12 +332,14 @@ async function handoffPitchToWhatsApp({ name, waUrl, btn }) {
 function renderQuickReplies() {
   if (!els.quickReplies) return;
   const hasName = Boolean(placeToken());
+  const needsNameIds = new Set(["ack", "pitch", "close", "disponibilidad"]);
   els.quickReplies.innerHTML = QUICK_REPLIES.map((r) => {
     const filled = fillReply(r.body);
-    const needsName = (r.id === "pitch" || r.id === "disponibilidad") && !hasName;
+    const needsName = needsNameIds.has(r.id) && !hasName;
+    const stepBadge = r.step ? `<span class="reply-meta">Paso ${r.step}/3</span>` : "";
     return `<article class="quick-reply-card" data-reply-id="${escapeHtml(r.id)}">
       <div class="quick-reply-head">
-        <h3>${escapeHtml(r.title)}</h3>
+        <h3>${escapeHtml(r.title)} ${stepBadge}</h3>
         <button type="button" class="btn btn-sm btn-primary" data-copy-reply="${escapeHtml(r.id)}">Copiar</button>
       </div>
       ${needsName ? `<p class="map-hint">Tocá <strong>Pitch + WhatsApp</strong> en el lead (o escribí el complejo arriba) antes de copiar.</p>` : ""}
@@ -323,7 +351,7 @@ function renderQuickReplies() {
     btn.addEventListener("click", () => {
       const item = QUICK_REPLIES.find((x) => x.id === btn.dataset.copyReply);
       if (!item) return;
-      if ((item.id === "pitch" || item.id === "disponibilidad") && !placeToken()) {
+      if (needsNameIds.has(item.id) && !placeToken()) {
         showError("Falta el nombre del complejo. Tocá «Pitch + WhatsApp» en el lead o completá el campo «Nombre del complejo».");
         els.replyPlaceName?.focus();
         return;
@@ -331,6 +359,19 @@ function renderQuickReplies() {
       copyText(fillReply(item.body), btn);
     });
   });
+}
+
+function opsStageSelectHtml(r) {
+  const current = r.ops_stage || "pending";
+  const opts = OPS_STAGES.map(
+    (s) =>
+      `<option value="${escapeHtml(s.id)}"${s.id === current ? " selected" : ""}>${escapeHtml(s.label)}</option>`
+  ).join("");
+  return `<label class="ops-stage-label"><span class="visually-hidden">Seguimiento</span>
+    <select class="ops-stage-select" data-ops-stage="${escapeHtml(r.place_id)}" title="Etapa de seguimiento">
+      ${opts}
+    </select>
+  </label>`;
 }
 
 function formatTwilioMoney(amount, currency) {
@@ -676,7 +717,7 @@ function bindLeadRowActions(tbody) {
   });
   tbody.querySelectorAll("[data-discard]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const ok = window.confirm("¿Descartar este lead? (STOP / no interesado)\nSale de Contestaron y Seguimiento.");
+      const ok = window.confirm("¿Marcar como perdido? (STOP / no interesado)\nSale de Contestaron y Seguimiento.");
       if (!ok) return;
       try {
         await api("/api/campaigns/mendoza-cabanas/discard", {
@@ -689,6 +730,22 @@ function bindLeadRowActions(tbody) {
         await refresh();
       } catch (err) {
         showError(err.message);
+      }
+    });
+  });
+  tbody.querySelectorAll("[data-ops-stage]").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const placeId = sel.dataset.opsStage;
+      const stage = sel.value;
+      try {
+        await api("/api/campaigns/mendoza-cabanas/ops-stage", {
+          method: "POST",
+          body: JSON.stringify({ place_id: placeId, ops_stage: stage }),
+        });
+        await refresh();
+      } catch (err) {
+        showError(err.message);
+        await refresh();
       }
     });
   });
@@ -764,10 +821,11 @@ function isPriorityReply(r) {
   return kind === "human_only" || kind === "human_after_auto" || kind === "empty_only";
 }
 
-function renderLeadActionRows(rows, tbody, { emptyText, showHandoff }) {
+function renderLeadActionRows(rows, tbody, { emptyText, showHandoff, showOpsStage }) {
   if (!tbody) return;
+  const colSpan = showOpsStage ? 6 : 5;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="admin-empty">${escapeHtml(emptyText)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="admin-empty">${escapeHtml(emptyText)}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows
@@ -793,15 +851,17 @@ function renderLeadActionRows(rows, tbody, { emptyText, showHandoff }) {
           : r._priorityFromFollowUp
             ? `<span class="reply-meta">Ya en seguimiento</span>`
             : "";
+      const stageCell = showOpsStage ? `<td>${opsStageSelectHtml(r)}</td>` : "";
       return `<tr class="${rowClass}">
         <td>${escapeHtml(r.place_name)}${r.base ? `<div class="reply-meta">${escapeHtml(r.base)}</div>` : ""}</td>
         <td>${escapeHtml(r.zone || "")}</td>
         <td><span class="badge ${replyBadgeClass(kind)}" title="${escapeHtml(label)}">${escapeHtml(label)}</span></td>
+        ${stageCell}
         <td>${formatReplyCell(r)}</td>
         <td class="actions-row">
           ${wa ? `<a class="btn btn-sm btn-whatsapp-primary" href="${wa}" target="_blank" rel="noopener">Solo abrir WhatsApp</a>` : ""}
           ${mail ? `<a class="btn btn-sm btn-secondary" href="${mail}">Email</a>` : ""}
-          <button type="button" class="btn btn-sm btn-primary" data-use-name="${escapeHtml(r.place_name || "")}" data-wa="${escapeHtml(wa || "")}" title="Copia el pitch con el nombre del complejo y abre tu WhatsApp">Pitch + WhatsApp</button>
+          <button type="button" class="btn btn-sm btn-primary" data-use-name="${escapeHtml(r.place_name || "")}" data-wa="${escapeHtml(wa || "")}" title="Copia el pitch (paso 2) con el nombre del complejo y abre tu WhatsApp">Pitch + WhatsApp</button>
           ${handoffBtn}
           <button type="button" class="btn btn-sm btn-secondary" data-discard="${escapeHtml(r.place_id)}" data-discard-reason="${looksOptOut ? "STOP" : "no interesado"}">${looksOptOut ? "Descartar STOP" : "No interesado"}</button>
         </td>
@@ -830,6 +890,7 @@ function renderResponded(respondedRows, followUpRows = []) {
   const priorityRows = [];
   for (const r of [...fromResponded, ...fromFollowUp, ...otherResponded]) {
     if (!r.place_id || seen.has(r.place_id)) continue;
+    if (r.ops_stage === "closed" || r.ops_stage === "lost") continue;
     seen.add(r.place_id);
     priorityRows.push(r);
   }
@@ -845,10 +906,12 @@ function renderResponded(respondedRows, followUpRows = []) {
         }`
       : "Elegí una base arriba (Mendoza / Córdoba). Sin base, se mezclan todas.",
     showHandoff: true,
+    showOpsStage: true,
   });
   renderLeadActionRows(autoOnly, els.respondedBody, {
     emptyText: base ? `Ningún auto-reply pendiente en «${base}»` : "Elegí una base para filtrar auto-replies",
     showHandoff: true,
+    showOpsStage: false,
   });
   if (els.prioritySection) {
     els.prioritySection.classList.toggle("has-items", priorityRows.length > 0);
@@ -877,6 +940,7 @@ function renderFollowUp(rows) {
       ? `Todavía no marcaste ninguno en «${selectedBaseName()}»`
       : "Todavía no marcaste ninguno",
     showHandoff: false,
+    showOpsStage: true,
   });
 }
 

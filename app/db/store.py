@@ -300,6 +300,7 @@ class Store:
         *,
         status: str | None = None,
         notes: str | None = None,
+        lead_fields: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
@@ -321,6 +322,12 @@ class Store:
             ).fetchone()
             result = dict(updated)
             lead_data = json.loads(result["lead_json"])
+            if lead_fields:
+                for key, value in lead_fields.items():
+                    if value is None:
+                        lead_data.pop(key, None)
+                    else:
+                        lead_data[key] = value
             lead_data["status"] = result["status"]
             lead_data["notes"] = result["notes"]
             conn.execute(

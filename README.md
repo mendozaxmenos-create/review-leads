@@ -326,10 +326,25 @@ La PC debe estar encendida y con sesión iniciada a la hora programada.
 - Demo white-label: `/demo?nombre=TuComplejo` (Pitch + WhatsApp ya agrega `?nombre=`)  
 - Pitch/demo: disponibilidad = planilla/sistema; panel en `/demo`; quick reply de objeción  
 
+**Cierre Priority (primer cliente — sin gastar Twilio):**
+
+```bash
+# Inventario Priority (tel, último msg, WA, demo ?nombre=)
+.venv\Scripts\python -m scripts.list_priority_leads
+```
+
+En `/campaign`:
+1. Contactar cada Priority (playbook 3 msgs: ack → demo → cierre)  
+2. Marcar etapa: pendiente → contactado → demo → cerrado / perdido  
+3. Botón **Pitch + WhatsApp** (copia pitch + abre chat; el link de la demo va adentro)  
+4. Éxito: ≥1 demo con nombre + decisión piloto o “no ahora”  
+5. Recién ahí: `CAMPAIGN_SEND_PAUSED=false` solo para piloto ≤20 con v6  
+
 **Mejora activa (sin gastar Twilio):**
 1. ~~Esperar aprobación Meta de v6~~ → **Approved**; opcional cambiar `TWILIO_TEMPLATE_SID` (pause sigue on)  
 2. ~~Conector planilla → bot~~ → CSV + **Google Sheets** genérico (`AVAILABILITY_SOURCE=sheets`)  
-3. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano  
+3. ~~CRM seguimiento Priority~~ → `ops_stage` + playbook + `list_priority_leads`  
+4. Retomar envíos solo con lote-prueba ≤20 midiendo reply humano (después del cierre Priority)
 
 ```bash
 # Crear/reenviar plantilla v6 (sin precio)
@@ -670,7 +685,8 @@ pip install -r requirements.txt   # si hubo cambios
 - [x] Demo white-label `?nombre=` + pitch con link personalizado
 - [x] Conector planilla CSV real → bot (`app/services/availability/`, seed `data/demo_availability/`)
 - [x] Adapter Google Sheets genérico (`sheets_source.py`; IDs/rangos por env, cualquier dueño)
-- [ ] Cambiar `TWILIO_TEMPLATE_SID` a v6 en el `.env` de ops + lote-prueba ≤20 (pause sigue hasta entonces)
+- [x] CRM Priority: `ops_stage` + playbook 3 msgs + `scripts/list_priority_leads` (cierre manual; pause on)
+- [ ] Cambiar `TWILIO_TEMPLATE_SID` a v6 en el `.env` de ops + lote-prueba ≤20 (pause sigue hasta primer cliente / piloto)
 - [ ] Excel / PMS detrás del mismo `AvailabilitySource`
 - [ ] Barrido nacional único (solo si Ola 1/2 valida unit economics)
 - [ ] Places `reservable` / Google Reserve en `booking_signals`
@@ -684,6 +700,7 @@ pip install -r requirements.txt   # si hubo cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| Ago 2026 | CRM Priority: etapas ops + playbook 3 msgs + `list_priority_leads`; demo UX polish (sin botón Abrir demo redundante) |
 | Ago 2026 | Adapter Google Sheets genérico (`AVAILABILITY_SOURCE=sheets`); v6 Meta Approved (docs: cómo switch SID; pause on) |
 | Ago 2026 | Planilla CSV real como `AvailabilitySource` v1; demo lee/escribe `data/demo_availability/`; panel fuente en `/demo` |
 | Ago 2026 | Pausa envíos (`CAMPAIGN_SEND_PAUSED`); plantilla v6 sin precio a Meta; demo `?nombre=`; pitch/fuente disponibilidad |

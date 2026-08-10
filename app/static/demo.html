@@ -15,58 +15,42 @@
   <body class="demo-body">
     <header class="demo-header">
       <div class="brand-block">
-        <p class="brand-mark">SofIA</p>
-        <h1>Probá el bot de reservas</h1>
-        <p class="brand-tagline">
-          Chat del huésped + panel dueño. Disponibilidad conectada a planilla/sistema (en demo, simulada). Seña MP/transferencia sin cobro real.
+        <p class="brand-mark demo-powered">SofIA</p>
+        <h1 id="demo-hero-title">Bot de reservas</h1>
+        <p class="brand-tagline" id="demo-hero-tag">
+          Probá el flujo completo: fechas, disponibilidad, pre-reserva y seña (sin cobro real).
         </p>
       </div>
     </header>
 
     <main class="demo-main">
       <aside class="demo-meta panel">
-        <h2>Complejo de muestra</h2>
-        <p id="demo-property-name" class="demo-prop-name">Demo SofIA</p>
-        <p id="demo-property-zone" class="map-hint">Complejo ficticio (se elige al azar)</p>
-        <ul class="demo-facts">
-          <li>Reservá con chips / calendario</li>
-          <li>Pagá seña: transferencia o Mercado Pago</li>
-          <li>MP → simulá el webhook; transferencia → aprobá en CRM</li>
-        </ul>
+        <p class="demo-aside-kicker">Complejo</p>
+        <p id="demo-property-name" class="demo-prop-name">…</p>
+        <p id="demo-property-zone" class="map-hint">Cargando…</p>
 
         <section class="demo-source" aria-label="Fuente de disponibilidad">
-          <h3>Fuente de disponibilidad</h3>
+          <h3>Disponibilidad</h3>
           <p class="map-hint demo-source-hint" id="demo-source-hint">
-            El bot lee una planilla real (CSV local; mismo contrato que Google Sheets).
+            En producción lee tu planilla o sistema. Acá ya consulta una fuente real de muestra.
           </p>
-          <dl class="demo-source-grid">
+          <dl class="demo-source-grid demo-source-grid-compact">
             <div>
               <dt>Fuente</dt>
               <dd id="demo-source-label">…</dd>
-            </div>
-            <div>
-              <dt>Detalle</dt>
-              <dd id="demo-source-detail">…</dd>
-            </div>
-            <div>
-              <dt>Cabañas</dt>
-              <dd id="demo-source-cabins">…</dd>
             </div>
             <div>
               <dt>Estado</dt>
               <dd id="demo-source-status">…</dd>
             </div>
           </dl>
-          <p class="map-hint">Editá <code>data/demo_availability/*.csv</code> y reiniciá el chat para ver el cambio.</p>
+          <p class="map-hint" id="demo-source-cabins-line" hidden></p>
         </section>
 
-        <p class="map-hint" id="turns-left"></p>
-        <button type="button" class="btn btn-secondary btn-sm" id="restart-btn">Reiniciar chat</button>
-
-        <section class="demo-owner" aria-label="Vista dueño CRM">
-          <h3>CRM dueño <span class="map-hint">(simulado)</span></h3>
+        <section class="demo-owner" aria-label="Vista dueño">
+          <h3>Tu vista como dueño</h3>
           <p class="map-hint demo-owner-hint">
-            Acá ves lo que le llegaría al complejo: link MP, comprobante, seña confirmada.
+            Mientras el huésped chatea, acá aparecen avisos de seña (MP / transferencia).
           </p>
           <div id="owner-feed" class="demo-owner-feed">
             <p class="map-hint">Todavía no hay eventos de pago.</p>
@@ -76,13 +60,16 @@
             <button type="button" class="btn btn-secondary btn-sm" id="reject-xfer-btn">Rechazar</button>
           </div>
         </section>
+
+        <p class="map-hint" id="turns-left"></p>
+        <button type="button" class="btn btn-secondary btn-sm" id="restart-btn">Reiniciar chat</button>
       </aside>
 
       <section class="demo-chat panel" aria-label="Chat de demo">
         <div class="demo-messages" id="messages" role="log" aria-live="polite"></div>
 
         <div class="demo-guides">
-          <p class="demo-guides-label">Atajos rápidos</p>
+          <p class="demo-guides-label">Elegí fechas</p>
           <div class="demo-chips" id="chips" aria-label="Respuestas rápidas"></div>
 
           <details class="demo-dates-panel" open>
@@ -106,18 +93,18 @@
                   <option value="6">6</option>
                 </select>
               </label>
-              <button type="button" class="btn btn-primary btn-sm" id="send-dates-btn">Consultar fechas</button>
+              <button type="button" class="btn btn-primary btn-sm" id="send-dates-btn">Consultar</button>
             </div>
           </details>
         </div>
 
         <form class="demo-composer" id="chat-form">
-          <label class="demo-composer-label" for="chat-input">Tu respuesta (nombre, fechas o lo que te pida el bot)</label>
+          <label class="demo-composer-label" for="chat-input">Escribí como huésped</label>
           <div class="demo-composer-row">
             <textarea
               id="chat-input"
               class="demo-chat-input"
-              placeholder="Ej: Me llamo Ana / somos 4 / ¿cuánto es la seña?"
+              placeholder="O escribí fechas… ej: viernes a domingo"
               autocomplete="off"
               maxlength="800"
               rows="2"
@@ -126,8 +113,7 @@
           </div>
         </form>
         <p class="map-hint demo-foot">
-          Muestra SofIA. En un complejo real la disponibilidad sale de su planilla/sistema; acá está simulada.
-          Si te gusta, pedile a Gustavo que lo arme con el tuyo.
+          Demo SofIA · sin cobro real. Si te sirve, lo conectamos a tu planilla.
         </p>
       </section>
     </main>
@@ -137,6 +123,6 @@
       <p>El bot está respondiendo…</p>
     </div>
 
-    <script src="/static/js/demo.js?v=16"></script>
+    <script src="/static/js/demo.js?v=17"></script>
   </body>
 </html>

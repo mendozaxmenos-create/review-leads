@@ -452,13 +452,92 @@ def list_follow_up(limit: int = 100) -> list[dict]:
     return _list_campaign_status_leads("follow_up", limit)
 
 
+@router.get("/mendoza-cabanas/priority")
+def list_priority(limit: int = 100) -> list[dict]:
+    """Priority operativos: humano / empty en responded+follow_up (no closed/lost)."""
+    from app.services.campaign_ops import is_priority_thread
+
+    responded = _list_campaign_status_leads("responded", limit)
+    follow = _list_campaign_status_leads("follow_up", limit)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for item in [*responded, *follow]:
+        pid = item.get("place_id")
+        if not pid or pid in seen:
+            continue
+        if not is_priority_thread(item.get("reply_thread_kind")):
+            continue
+        if item.get("ops_stage") in {"closed", "lost"}:
+            continue
+        seen.add(pid)
+        out.append(item)
+    by_pri: dict[int, list[dict]] = {}
+    for item in out:
+        by_pri.setdefault(int(item.get("reply_priority", 9)), []).append(item)
+    ordered: list[dict] = []
+    for pri in sorted(by_pri):
+        bucket = by_pri[pri]
+        bucket.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+        ordered.extend(bucket)
+    return ordered
+
+
+@router.post("/mendoza-cabanas/ops-stage")
+async def set_ops_stage(body: dict) -> dict:
+    """Marca etapa de cierre ops: pending|contacted|demo|closed|lost."""
+    from app.services.campaign_ops import (
+        OPS_STAGE_LABELS,
+        normalize_ops_stage,
+        pipeline_status_for_ops,
+    )
+
+    place_id = (body or {}).get("place_id")
+    stage = normalize_ops_stage((body or {}).get("ops_stage") or (body or {}).get("stage"))
+    if not place_id:
+        raise HTTPException(status_code=400, detail="place_id requerido")
+    if not stage:
+        raise HTTPException(
+            status_code=400,
+            detail="ops_stage debe ser pending|contacted|demo|closed|lost",
+        )
+    store = get_store()
+    store.init()
+    meta = store.get_saved_leads_by_places([place_id]).get(place_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    note = (meta.get("notes") or "").strip()
+    label = OPS_STAGE_LABELS[stage]
+    stage_note = f"Ops: {label}"
+    new_notes = note if note.endswith(stage_note) else (note + (" | " if note else "") + stage_note)
+    store.update_saved_lead(
+        meta["saved_lead_id"],
+        status=pipeline_status_for_ops(stage),
+        notes=new_notes,
+        lead_fields={"ops_stage": stage},
+    )
+    return {
+        "ok": True,
+        "place_id": place_id,
+        "ops_stage": stage,
+        "ops_stage_label": label,
+        "status": pipeline_status_for_ops(stage),
+    }
+
+
 def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
+    from app.routers.demo import public_demo_share_url
+    from app.services.campaign_ops import (
+        OPS_STAGE_LABELS,
+        demo_url_for_place,
+        resolve_ops_stage,
+    )
     from app.services.mendoza_campaign import CAMPAIGN_ID, CAMPAIGN_TAG
     from app.services.reply_classify import classify_inbound_body, classify_inbound_thread
 
     store = get_store()
     store.init()
     rows = store.list_campaign_leads_by_status(CAMPAIGN_TAG, status, limit=min(limit, 500))
+    demo_base = public_demo_share_url() or "https://review-leads.onrender.com/demo"
     out = []
     for r in rows:
         lead = r["lead"]
@@ -470,6 +549,7 @@ def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
         last_in = inbound[-1] if inbound else None
         phone = lead.get("phone") or ""
         digits = "".join(ch for ch in phone if ch.isdigit())
+        ops = resolve_ops_stage(r["status"], lead)
         inbound_replies = []
         for m in inbound:
             body = (m.get("body") or "").strip()
@@ -496,6 +576,8 @@ def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
                 "base": lead.get("base") or "Mendoza",
                 "phone": phone,
                 "status": r["status"],
+                "ops_stage": ops,
+                "ops_stage_label": OPS_STAGE_LABELS[ops],
                 "notes": r["notes"],
                 "updated_at": r["updated_at"],
                 "last_reply": (last_in or {}).get("body"),
@@ -509,6 +591,7 @@ def _list_campaign_status_leads(status: str, limit: int) -> list[dict]:
                 "reply_inbound_count": thread["inbound_count"],
                 "reply_priority": thread["priority"],
                 "wa_me": f"https://wa.me/{digits}" if digits else None,
+                "demo_url": demo_url_for_place(lead.get("place_name"), demo_base),
                 "mailto": f"mailto:{lead['email']}" if lead.get("email") else None,
             }
         )
@@ -551,8 +634,9 @@ async def mark_handoff(body: dict) -> dict:
         meta["saved_lead_id"],
         status="follow_up",
         notes=(note + (" | " if note else "") + handoff),
+        lead_fields={"ops_stage": "contacted"},
     )
-    return {"ok": True, "place_id": place_id, "channel": channel, "status": "follow_up"}
+    return {"ok": True, "place_id": place_id, "channel": channel, "status": "follow_up", "ops_stage": "contacted"}
 
 
 @router.post("/mendoza-cabanas/discard")
@@ -573,8 +657,9 @@ async def discard_lead(body: dict) -> dict:
         meta["saved_lead_id"],
         status="discarded",
         notes=(note + (" | " if note else "") + discard_note),
+        lead_fields={"ops_stage": "lost"},
     )
-    return {"ok": True, "place_id": place_id, "status": "discarded"}
+    return {"ok": True, "place_id": place_id, "status": "discarded", "ops_stage": "lost"}
 
 
 @router.post("/mendoza-cabanas/alerts/test")

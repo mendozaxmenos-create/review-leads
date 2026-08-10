@@ -1351,6 +1351,24 @@ details#advanced-logs summary {
   vertical-align: top;
 }
 
+.ops-stage-select {
+  max-width: 10.5rem;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .admin-table th {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -1552,7 +1570,7 @@ details#advanced-logs summary {
   }
 }
 
-/* CampaÃÂÃÂÃÂÃÂ±a: respuestas rÃÂÃÂÃÂÃÂ¡pidas */
+/* CampaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ±a: respuestas rÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¡pidas */
 .quick-replies {
   display: grid;
   gap: 0.85rem;
@@ -1590,10 +1608,32 @@ details#advanced-logs summary {
   opacity: 0.92;
 }
 
-/* ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ Demo booking bot ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ÃÂÃÂ¯ÃÂÃÂ¿ÃÂÃÂ½ */
+/* Demo booking bot */
 .demo-body {
   min-height: 100vh;
 }
+.demo-powered {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.demo-aside-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.demo-source-grid-compact {
+  grid-template-columns: auto 1fr;
+}
+.demo-header .brand-block h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  line-height: 1.15;
+}
+
 
 .demo-header {
   padding: 1.5rem 1.75rem 1rem;
@@ -1612,6 +1652,15 @@ details#advanced-logs summary {
 @media (max-width: 800px) {
   .demo-main {
     grid-template-columns: 1fr;
+  }
+  .demo-chat {
+    order: -1;
+  }
+  .demo-header {
+    padding: 1rem 1.1rem 0.75rem;
+  }
+  .demo-main {
+    padding: 1rem 1.1rem 2rem;
   }
 }
 
@@ -1787,12 +1836,12 @@ details#advanced-logs summary {
 }
 
 .demo-dates-panel > summary::before {
-  content: "ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¸ ";
+  content: "\25B8 ";
   color: var(--accent);
 }
 
 .demo-dates-panel[open] > summary::before {
-  content: "ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¾ ";
+  content: "\25BE ";
 }
 
 .demo-dates {

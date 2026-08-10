@@ -536,26 +536,17 @@ def create_session(*, property_name: str | None = None) -> dict[str, Any]:
     sid = uuid.uuid4().hex
     prop = _make_property(property_name)
     welcome = (
-        f"¡Hola! 👋 Soy el asistente de *{prop['name']}*.\n\n"
-        f"Estamos en {prop['zone']}.\n\n"
-        "Para cotizarte rápido:\n"
-        "1) Elegí fechas (calendario o chips de abajo)\n"
-        "2) Decime cuántas personas son\n"
-        "3) Te muestro las cabañas disponibles (tipo y calidad)\n\n"
-        "¿Empezamos? Tocá un atajo o el calendario."
+        f"¡Hola! Soy el asistente de *{prop['name']}*.\n\n"
+        f"{prop['zone']}.\n\n"
+        "Elegí fechas abajo (finde o calendario), decime cuántas personas son "
+        "y te muestro las cabañas disponibles."
     )
     if prop.get("white_label"):
         welcome = (
-            f"¡Hola! 👋 Soy el asistente de *{prop.get('display_name') or prop['name']}* "
-            f"(demo SofIA).\n\n"
-            "El *nombre* es el de tu complejo; el catálogo de cabañas es de muestra para que "
-            "veas el flujo (fechas → disponibilidad → seña).\n\n"
-            f"Zona de ejemplo: {prop['zone']}.\n\n"
-            "Para cotizarte rápido:\n"
-            "1) Elegí fechas (calendario o chips)\n"
-            "2) Decime cuántas personas son\n"
-            "3) Te muestro opciones disponibles\n\n"
-            "¿Empezamos?"
+            f"¡Hola! Soy el asistente de *{prop.get('display_name') or prop['name']}*.\n\n"
+            "Demo SofIA: el *flujo* es el real (fechas → disponibilidad → seña); "
+            "las unidades son de muestra.\n\n"
+            "Elegí fechas abajo (finde o calendario) y te cotizo."
         )
     _sessions[sid] = {
         "property": prop,

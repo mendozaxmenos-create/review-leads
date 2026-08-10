@@ -10,9 +10,10 @@ const els = {
   propZone: document.getElementById("demo-property-zone"),
   sourceHint: document.getElementById("demo-source-hint"),
   sourceLabel: document.getElementById("demo-source-label"),
-  sourceDetail: document.getElementById("demo-source-detail"),
-  sourceCabins: document.getElementById("demo-source-cabins"),
   sourceStatus: document.getElementById("demo-source-status"),
+  sourceCabinsLine: document.getElementById("demo-source-cabins-line"),
+  heroTitle: document.getElementById("demo-hero-title"),
+  heroTag: document.getElementById("demo-hero-tag"),
   chips: document.getElementById("chips"),
   chipsLabel: document.querySelector(".demo-guides-label"),
   datesPanel: document.querySelector(".demo-dates-panel"),
@@ -126,7 +127,6 @@ const CHIP_SETS = {
   dates: [
     { label: "Este finde", text: "Hola, ¿hay lugar este viernes a domingo?" },
     { label: "Próximo finde", text: "Busco el próximo viernes a domingo." },
-    { label: "Usar calendario", text: "__focus_calendar__" },
   ],
   guests: [
     { label: "2 personas", text: "Somos 2 personas." },
@@ -205,7 +205,8 @@ function setLoading(on) {
 function appendBubble(role, text) {
   const div = document.createElement("div");
   div.className = `demo-bubble demo-bubble-${role}`;
-  div.innerHTML = `<div class="demo-bubble-label">${role === "user" ? "Vos" : "Bot"}</div><div class="demo-bubble-text">${escapeHtml(text).replace(/\n/g, "<br>")}</div>`;
+  const label = role === "user" ? "Huésped" : "Asistente";
+  div.innerHTML = `<div class="demo-bubble-label">${label}</div><div class="demo-bubble-text">${escapeHtml(text).replace(/\n/g, "<br>")}</div>`;
   els.messages.appendChild(div);
   els.messages.scrollTop = els.messages.scrollHeight;
 }
@@ -398,17 +399,48 @@ function demoPlaceNameFromUrl() {
 
 function renderAvailabilitySource(prop) {
   const src = prop?.availability_source || {};
-  if (els.sourceLabel) els.sourceLabel.textContent = src.label || "Planilla";
-  if (els.sourceDetail) els.sourceDetail.textContent = src.detail || "—";
-  if (els.sourceCabins) els.sourceCabins.textContent = String(src.cabins ?? "—");
+  if (els.sourceLabel) {
+    els.sourceLabel.textContent = src.connected === false ? "Catálogo de respaldo" : "Planilla conectada";
+  }
   if (els.sourceStatus) {
-    els.sourceStatus.textContent = src.connected === false ? "Sin planilla" : "Conectado";
+    els.sourceStatus.textContent = src.connected === false ? "Sin planilla" : "Lista para cotizar";
   }
   if (els.sourceHint) {
     els.sourceHint.textContent = src.connected
-      ? "El bot consulta esta fuente al pedir fechas (calendario + pre-reservas)."
-      : "No se encontró la planilla CSV — se usó catálogo de respaldo.";
+      ? "Al pedir fechas, el bot lee ocupación y deja la pre-reserva anotada."
+      : "No había planilla: se usó un catálogo de respaldo.";
   }
+  if (els.sourceCabinsLine) {
+    const n = src.cabins;
+    if (n != null && n !== "") {
+      els.sourceCabinsLine.hidden = false;
+      els.sourceCabinsLine.textContent = `${n} cabaña${Number(n) === 1 ? "" : "s"} en la fuente`;
+    } else {
+      els.sourceCabinsLine.hidden = true;
+    }
+  }
+}
+
+function applyPropertyChrome(prop) {
+  if (!prop) return;
+  const name = prop.display_name || prop.name || "Demo";
+  if (els.propName) els.propName.textContent = name;
+  const zone = prop.zone || "";
+  if (els.propZone) {
+    els.propZone.textContent = prop.white_label
+      ? `${zone || "Tu zona"} · flujo real, unidades de muestra`
+      : zone || "Complejo de muestra";
+  }
+  if (els.heroTitle) {
+    els.heroTitle.textContent = prop.white_label ? name : "Bot de reservas";
+  }
+  if (els.heroTag) {
+    els.heroTag.textContent = prop.white_label
+      ? "Así atendería el WhatsApp de tu complejo: fechas, disponibilidad y seña."
+      : "Probá el flujo completo: fechas, disponibilidad, pre-reserva y seña (sin cobro real).";
+  }
+  document.title = prop.white_label ? `${name} · demo SofIA` : "Demo bot de reservas · SofIA";
+  renderAvailabilitySource(prop);
 }
 
 async function startSession() {
@@ -419,12 +451,7 @@ async function startSession() {
     const data = await api("/api/demo/session", propertyName ? { property_name: propertyName } : {});
     sessionId = data.session_id;
     if (data.property) {
-      els.propName.textContent = data.property.display_name || data.property.name || "Demo";
-      const zone = data.property.zone || "";
-      els.propZone.textContent = data.property.white_label
-        ? `${zone} · catálogo de muestra (nombre de tu complejo)`
-        : zone || "Complejo ficticio (se elige al azar)";
-      renderAvailabilitySource(data.property);
+      applyPropertyChrome(data.property);
     }
     onBotReply(data);
   } catch (err) {
