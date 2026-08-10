@@ -202,11 +202,17 @@ function setLoading(on) {
   if (els.rejectXfer) els.rejectXfer.disabled = on;
 }
 
+function formatBubbleHtml(text) {
+  return escapeHtml(text)
+    .replace(/\*([^*]+)\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
+}
+
 function appendBubble(role, text) {
   const div = document.createElement("div");
   div.className = `demo-bubble demo-bubble-${role}`;
   const label = role === "user" ? "Huésped" : "Asistente";
-  div.innerHTML = `<div class="demo-bubble-label">${label}</div><div class="demo-bubble-text">${escapeHtml(text).replace(/\n/g, "<br>")}</div>`;
+  div.innerHTML = `<div class="demo-bubble-label">${label}</div><div class="demo-bubble-text">${formatBubbleHtml(text)}</div>`;
   els.messages.appendChild(div);
   els.messages.scrollTop = els.messages.scrollHeight;
 }
@@ -326,6 +332,16 @@ function applyGuide(guide, unitOptions) {
     if (showCal) els.datesPanel.open = true;
   }
 
+  // En fechas: Consultar es la acción principal; Enviar queda secundario
+  if (els.sendBtn) {
+    els.sendBtn.classList.toggle("btn-secondary", showCal);
+    els.sendBtn.classList.toggle("btn-primary", !showCal);
+  }
+  if (els.sendDates) {
+    els.sendDates.classList.toggle("btn-primary", true);
+  }
+  document.body.classList.toggle("demo-step-dates", showCal);
+
   renderChips();
 }
 
@@ -395,6 +411,18 @@ function demoPlaceNameFromUrl() {
   } catch {
     return "";
   }
+}
+
+function bootstrapFromUrl() {
+  const name = demoPlaceNameFromUrl();
+  if (!name) return;
+  if (els.heroTitle) els.heroTitle.textContent = name;
+  if (els.propName) els.propName.textContent = name;
+  if (els.propZone) els.propZone.textContent = "Cargando demo…";
+  if (els.heroTag) {
+    els.heroTag.textContent = "Así atendería el WhatsApp de tu complejo: fechas, disponibilidad y seña.";
+  }
+  document.title = `${name} · demo SofIA`;
 }
 
 function renderAvailabilitySource(prop) {
@@ -575,5 +603,6 @@ els.approveXfer?.addEventListener("click", () => ownerAction("/api/demo/approve-
 els.rejectXfer?.addEventListener("click", () => ownerAction("/api/demo/reject-transfer"));
 
 initDateDefaults();
+bootstrapFromUrl();
 applyGuide("dates");
 startSession();

@@ -1570,7 +1570,7 @@ details#advanced-logs summary {
   }
 }
 
-/* CampaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ±a: respuestas rÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¡pidas */
+/* CampaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ±a: respuestas rÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¡pidas */
 .quick-replies {
   display: grid;
   gap: 0.85rem;
@@ -1739,6 +1739,18 @@ details#advanced-logs summary {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  min-height: 11rem;
+}
+
+.demo-bubble-text strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+body.demo-step-dates .demo-composer-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .demo-bubble {

@@ -542,11 +542,9 @@ def create_session(*, property_name: str | None = None) -> dict[str, Any]:
         "y te muestro las cabañas disponibles."
     )
     if prop.get("white_label"):
-        welcome = (
+    welcome = (
             f"¡Hola! Soy el asistente de *{prop.get('display_name') or prop['name']}*.\n\n"
-            "Demo SofIA: el *flujo* es el real (fechas → disponibilidad → seña); "
-            "las unidades son de muestra.\n\n"
-            "Elegí fechas abajo (finde o calendario) y te cotizo."
+            "Elegí fechas abajo (finde o calendario) y te cotizo disponibilidad y seña."
         )
     _sessions[sid] = {
         "property": prop,
